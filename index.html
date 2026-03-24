@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>RED Intelfon — Oportunidades</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Color corporativo aunque falle Tailwind (Vite debe procesar el CSS; esto es respaldo visual) -->
+    <style>
+      :root {
+        --ifon-red: #c8151b;
+        --ifon-navy: #145478;
+        --ifon-black: #000000;
+        --ifon-bg: #e4e4e4;
+      }
+      html {
+        background-color: var(--ifon-bg);
+      }
+      .ifon-masthead {
+        background-color: var(--ifon-black) !important;
+        border-bottom: 4px solid var(--ifon-red) !important;
+        color: #fff !important;
+      }
+      .ifon-band {
+        background-color: var(--ifon-navy) !important;
+        color: #fff !important;
+      }
+      .ifon-step-wrap {
+        background-color: #f0f0f0 !important;
+        border: 1px solid #afacb2 !important;
+        /* Ancho = contenido: el scroll horizontal lo hace el padre overflow-x-auto */
+        width: max-content;
+        max-width: none;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      #lead-form button[type='submit']:hover {
+        background-color: #700306 !important;
+      }
+      /* Safe area (móviles con notch) */
+      .layout-shell {
+        padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+        padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+      }
+      .ifon-masthead .mx-auto {
+        padding-left: max(1rem, env(safe-area-inset-left, 0px));
+        padding-right: max(1rem, env(safe-area-inset-right, 0px));
+        padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+      }
+    </style>
+  </head>
+  <body class="min-w-0 font-sans text-ink-900 antialiased">
+    <div class="ifon-masthead border-b-4 border-brand-red bg-brand-black text-white">
+      <div
+        class="mx-auto flex max-w-6xl flex-col items-stretch justify-between gap-3 py-3 sm:flex-row sm:items-center sm:gap-2"
+      >
+        <div class="flex shrink-0 items-center">
+          <img
+            src="/logo-red-ptt.png"
+            alt="RED PTT"
+            width="48"
+            height="48"
+            class="h-11 w-11 object-contain sm:h-12 sm:w-12"
+            decoding="async"
+          />
+        </div>
+        <span class="text-[11px] font-medium uppercase leading-snug tracking-wide text-brand-grey sm:text-xs"
+          >Radiocomunicación · Ventas</span
+        >
+      </div>
+    </div>
+
+    <div class="layout-shell mx-auto w-full max-w-6xl min-w-0 px-3 py-6 sm:px-5 sm:py-8 md:px-6 lg:px-8 lg:py-10">
+      <header
+        class="mb-8 flex flex-col gap-4 border-b-2 border-ink-300 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:pb-8"
+      >
+        <div class="min-w-0">
+          <p class="text-xs font-bold uppercase tracking-widest" style="color: #145478">Registro de lead</p>
+          <h1
+            class="mt-2 text-2xl font-extrabold uppercase leading-tight tracking-tight sm:text-3xl md:text-4xl"
+            style="color: #000"
+          >
+            Oportunidad
+          </h1>
+        </div>
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            id="btn-export"
+            class="min-h-[44px] w-full rounded-sm border-2 border-brand-black bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-900 shadow-card transition hover:bg-brand-surface sm:min-h-0 sm:w-auto"
+          >
+            Exportar JSON
+          </button>
+          <button
+            type="button"
+            id="btn-reset"
+            class="min-h-[44px] w-full rounded-sm border-2 border-brand-black bg-brand-surface px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-brand-maroon transition hover:bg-brand-redHi hover:text-white sm:min-h-0 sm:w-auto"
+          >
+            Limpiar todo
+          </button>
+        </div>
+      </header>
+
+      <section class="panel mb-8 min-w-0 sm:p-0">
+        <div class="ifon-band px-5 py-3 sm:px-7">
+          <h2 class="text-base font-extrabold uppercase tracking-wide">Ciclo de ventas</h2>
+        </div>
+        <div
+          class="min-w-0 overflow-x-auto overscroll-x-contain p-5 pb-4 sm:p-7 sm:pb-5 sm:pt-5 [-webkit-overflow-scrolling:touch]"
+        >
+          <div class="ifon-step-wrap rounded-sm px-3 py-5 sm:px-5">
+            <div id="stepper" class="w-max min-w-0"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel mb-10 min-w-0 overflow-hidden sm:p-0">
+        <div class="ifon-band flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-white/80">Etapa</p>
+            <h2 id="stage-title" class="text-lg font-extrabold uppercase tracking-tight text-white sm:text-xl"></h2>
+          </div>
+          <span
+            id="stage-badge"
+            class="inline-flex max-w-full min-w-0 items-center break-words rounded-sm border-2 border-white bg-black/20 px-3 py-1 text-left text-[11px] font-bold uppercase leading-snug tracking-wide text-white sm:text-xs"
+          ></span>
+        </div>
+        <div class="p-5 sm:p-7 sm:pt-6">
+
+        <form id="lead-form" class="min-w-0 space-y-8 sm:space-y-10">
+          <div class="grid min-w-0 gap-6 md:grid-cols-2 md:gap-8 lg:gap-10">
+            <!-- Columna izquierda: cliente y vendedor -->
+            <div class="form-well">
+              <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">
+                Cliente y vendedor
+              </h3>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del cliente</span>
+                <input
+                  type="text"
+                  id="client-name"
+                  name="clientName"
+                  required
+                  autocomplete="name"
+                  class="input-industrial-highlight"
+                  placeholder="Nombre o razón social"
+                />
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Correo del cliente</span>
+                <input
+                  type="email"
+                  id="client-email"
+                  name="clientEmail"
+                  required
+                  autocomplete="email"
+                  class="input-industrial"
+                  placeholder="correo@ejemplo.com"
+                />
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Teléfono del cliente</span>
+                <input
+                  type="tel"
+                  id="client-phone"
+                  name="clientPhone"
+                  required
+                  autocomplete="tel"
+                  class="input-industrial"
+                  placeholder="Ej. +34 600 000 000"
+                />
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del vendedor</span>
+                <input
+                  type="text"
+                  id="seller-name"
+                  name="sellerName"
+                  required
+                  autocomplete="name"
+                  class="input-industrial"
+                  placeholder="Comercial asignado"
+                />
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Importe de factura total</span>
+                <input
+                  type="number"
+                  id="total-invoice-amount"
+                  min="0"
+                  step="0.01"
+                  class="input-industrial"
+                  placeholder="0,00"
+                />
+              </label>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Territorio</span>
+                <input
+                  type="text"
+                  id="territory"
+                  class="input-industrial"
+                  placeholder="Zona o territorio"
+                />
+              </label>
+
+              <label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-800">
+                <input
+                  type="checkbox"
+                  id="display-system-currency"
+                  class="h-4 w-4 rounded-sm border-2 border-ink-400 accent-[#c8151b] focus:ring-2 focus:ring-brand-navy"
+                />
+                Visualizar en moneda del sistema
+              </label>
+            </div>
+
+            <!-- Columna derecha: oportunidad -->
+            <div class="form-well">
+              <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">Datos del documento</h3>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre oportunidad</span>
+                <input
+                  type="text"
+                  id="opportunity-name"
+                  required
+                  class="input-industrial"
+                  placeholder="Título del negocio"
+                />
+              </label>
+
+              <div class="grid gap-5 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Número de oportunidad</span>
+                  <input
+                    type="text"
+                    id="opportunity-number"
+                    class="input-industrial"
+                    placeholder="Ej. 1"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Estado del documento</span>
+                  <select id="document-status" class="input-industrial">
+                    <option value="abierto">Abierto</option>
+                    <option value="cerrado_ganado">Cerrado ganado</option>
+                    <option value="cerrado_perdido">Cerrado perdido</option>
+                    <option value="pausa">En pausa</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="grid gap-5 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de inicio</span>
+                  <input
+                    type="date"
+                    id="opportunity-start-date"
+                    required
+                    class="input-industrial bg-brand-surface"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de cierre</span>
+                  <input type="date" id="opportunity-closing-date" class="input-industrial bg-brand-surface" />
+                </label>
+              </div>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Actividades abiertas</span>
+                <input
+                  type="number"
+                  id="open-activities-count"
+                  min="0"
+                  step="1"
+                  class="input-industrial"
+                  placeholder="0"
+                />
+              </label>
+
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-xs font-bold uppercase tracking-wide text-ink-700">% de cierre</span>
+                  <span class="text-sm font-extrabold text-brand-red tabular-nums" id="closing-percent-label" aria-live="polite"></span>
+                </div>
+                <input
+                  type="number"
+                  id="closing-percent"
+                  min="0"
+                  max="100"
+                  step="1"
+                  class="input-industrial"
+                  placeholder="0 – 100"
+                />
+                <div class="h-3 overflow-hidden rounded-sm border border-ink-300 bg-ink-100">
+                  <div
+                    id="closing-percent-bar"
+                    class="h-full rounded-sm bg-gradient-to-r from-brand-red via-brand-redHi to-brand-navy transition-all duration-200"
+                    style="width: 0%"
+                  ></div>
+                </div>
+              </div>
+
+              <label class="block">
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Monto potencial</span>
+                <input
+                  type="number"
+                  id="potential-amount"
+                  min="0"
+                  step="0.01"
+                  class="input-industrial"
+                  placeholder="Importe estimado"
+                />
+              </label>
+
+              <div class="grid gap-5 sm:grid-cols-2">
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Clase de documento</span>
+                  <input
+                    type="text"
+                    id="related-doc-class"
+                    class="input-industrial"
+                    placeholder="Oferta, pedido…"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Número de documento</span>
+                  <input
+                    type="text"
+                    id="related-doc-number"
+                    class="input-industrial"
+                    placeholder="Referencia"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-sm border-2 border-dashed border-ink-300 bg-white p-4 sm:p-5">
+            <label class="block">
+              <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-ink-700">Observaciones</span>
+              <textarea
+                id="opportunity-notes"
+                rows="4"
+                class="input-industrial resize-y min-h-[7rem]"
+                placeholder="Notas"
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="border-t-2 border-ink-300 bg-gradient-to-b from-brand-surface/40 to-white pt-6 sm:pt-8">
+            <label class="mb-4 flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold text-ink-800">
+              <input
+                type="checkbox"
+                id="advance-next"
+                checked
+                class="h-5 w-5 shrink-0 rounded-sm border-2 border-ink-400 accent-[#c8151b] focus:ring-2 focus:ring-brand-navy sm:h-4 sm:w-4"
+              />
+              Avanzar etapa al enviar
+            </label>
+            <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="submit"
+                class="min-h-[48px] w-full rounded-sm border-2 border-black px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-card transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:w-auto sm:px-8"
+                style="background-color: #c8151b; border-color: #000"
+              >
+                Enviar en esta etapa
+              </button>
+            </div>
+          </div>
+        </form>
+        </div>
+      </section>
+
+      <section class="panel min-w-0 overflow-hidden sm:p-0">
+        <div class="ifon-band flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <h2 class="text-base font-extrabold uppercase tracking-wide">Historial de etapas</h2>
+          <p id="row-count" class="text-xs font-bold uppercase tracking-wide text-white/90">0 registros</p>
+        </div>
+        <div class="p-4 sm:p-7 sm:pt-5">
+        <div class="overflow-x-auto border-2 border-ink-300 [-webkit-overflow-scrolling:touch]">
+          <table class="w-full min-w-[1000px] text-left text-sm md:min-w-[1100px]">
+            <thead>
+              <tr
+                class="border-b-2 border-black text-xs font-extrabold uppercase tracking-wide text-white"
+                style="background-color: #145478"
+              >
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">#</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Etapa</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Enviado</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Cliente</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Vendedor</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Inicio</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Cierre</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">%</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Monto pot.</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Documento</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+        <p id="empty-hint" class="mt-4 text-center text-xs font-semibold text-ink-500">Sin registros.</p>
+        </div>
+      </section>
+
+      <footer class="mt-10 border-t-2 border-ink-300 pt-6 text-center text-xs font-medium uppercase tracking-wide text-ink-500">
+        RED Intelfon · Uso interno ·
+        <code class="rounded-sm border border-ink-300 bg-brand-surface px-1.5 py-0.5 font-mono text-[10px] text-ink-800">npm run dev</code>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

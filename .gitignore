@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.DS_Store
+.env
+# Copia local; el logo servido está en public/logo-red-ptt.png
+LOGO_RED_PTT_SIN_FONDO_eejqiu (2).png
