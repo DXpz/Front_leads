@@ -1,9 +1,11 @@
 import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry } from './types';
-import { clearStorage, loadState, saveState } from './store';
+import { emptySnapshot, normalizeHistoryRow } from './migrate';
+import { loadState, saveState } from './store';
 import { todayIsoDate } from './utils/format';
+import { downloadHistoryCsv } from './utils/historyCsv';
 import { renderStepper, stepIndexFromTarget } from './ui/stepper';
-import { renderHistoryTable } from './ui/historyTable';
+import { filterHistoryByOpportunityNumber, renderHistoryTable } from './ui/historyTable';
 import {
   bindClosingPercentBar,
   queryOpportunityFormElements,
@@ -25,6 +27,8 @@ type Elements = {
   advanceNext: HTMLInputElement;
   btnExport: HTMLButtonElement;
   btnReset: HTMLButtonElement;
+  historyOpportunitySearch: HTMLInputElement;
+  btnExportHistoryCsv: HTMLButtonElement;
 };
 
 function queryElements(): Elements {
@@ -45,6 +49,8 @@ function queryElements(): Elements {
     advanceNext: q<HTMLInputElement>('advance-next'),
     btnExport: q<HTMLButtonElement>('btn-export'),
     btnReset: q<HTMLButtonElement>('btn-reset'),
+    historyOpportunitySearch: q<HTMLInputElement>('history-opportunity-search'),
+    btnExportHistoryCsv: q<HTMLButtonElement>('btn-export-history-csv'),
   };
 }
 
@@ -65,10 +71,68 @@ function updateStagePanel(els: Elements, state: AppState): void {
   els.stageBadge.className = `inline-flex w-fit items-center rounded-sm border-2 border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white ${s.color}`;
 }
 
+let historySearchTimer: ReturnType<typeof setTimeout> | null = null;
+/** Filas mostradas en la tabla (mismo conjunto que exporta el CSV). */
+let lastHistoryTableRows: StageEntry[] = [];
+
+function setHistoryExportButtonEnabled(els: Elements, enabled: boolean): void {
+  els.btnExportHistoryCsv.disabled = !enabled;
+  els.btnExportHistoryCsv.classList.toggle('opacity-50', !enabled);
+  els.btnExportHistoryCsv.classList.toggle('cursor-not-allowed', !enabled);
+}
+
+/** Pinta el historial desde PostgreSQL (GET /api/history); si la API falla, usa el estado en memoria. */
+async function paintHistoryTable(els: Elements, state: AppState): Promise<void> {
+  const raw = els.historyOpportunitySearch.value;
+  const trimmed = raw.trim();
+
+  if (!trimmed) {
+    lastHistoryTableRows = [];
+    setHistoryExportButtonEnabled(els, false);
+    renderHistoryTable(els.historyBody, [], els.rowCount, els.emptyHint, {
+      totalUnfiltered: 0,
+      filterActive: false,
+      idleAwaitingSearch: true,
+    });
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/history?opportunityNumber=${encodeURIComponent(trimmed)}`);
+    if (!r.ok) throw new Error('api');
+    const data = (await r.json()) as { entries: unknown[]; total: number };
+    const rows = data.entries
+      .map((e) => normalizeHistoryRow(e))
+      .filter((x): x is StageEntry => x !== null);
+    lastHistoryTableRows = rows;
+    setHistoryExportButtonEnabled(els, rows.length > 0);
+    renderHistoryTable(els.historyBody, rows, els.rowCount, els.emptyHint, {
+      totalUnfiltered: data.total,
+      filterActive: true,
+    });
+  } catch {
+    const filtered = filterHistoryByOpportunityNumber(state.history, raw);
+    lastHistoryTableRows = filtered;
+    setHistoryExportButtonEnabled(els, filtered.length > 0);
+    renderHistoryTable(els.historyBody, filtered, els.rowCount, els.emptyHint, {
+      totalUnfiltered: state.history.length,
+      filterActive: true,
+    });
+  }
+}
+
+function scheduleHistoryPaint(els: Elements, state: AppState): void {
+  if (historySearchTimer) clearTimeout(historySearchTimer);
+  historySearchTimer = setTimeout(() => {
+    historySearchTimer = null;
+    void paintHistoryTable(els, state);
+  }, 280);
+}
+
 function fullRender(els: Elements, state: AppState): void {
   renderStepper(els.stepper, state.currentStageIndex);
   updateStagePanel(els, state);
-  renderHistoryTable(els.historyBody, state.history, els.rowCount, els.emptyHint);
+  void paintHistoryTable(els, state);
 }
 
 function cloneSnapshot(form: OpportunityForm): OpportunityForm {
@@ -120,6 +184,18 @@ export async function mountApp(): Promise<void> {
     el.addEventListener('input', onDraftChange);
     el.addEventListener('change', onDraftChange);
   }
+
+  els.historyOpportunitySearch.addEventListener('input', () => scheduleHistoryPaint(els, state));
+  els.historyOpportunitySearch.addEventListener('search', () => void paintHistoryTable(els, state));
+
+  setHistoryExportButtonEnabled(els, false);
+  els.btnExportHistoryCsv.addEventListener('click', () => {
+    if (lastHistoryTableRows.length === 0) {
+      alert('Busca un número de oportunidad y espera a que aparezcan filas en la tabla.');
+      return;
+    }
+    downloadHistoryCsv(lastHistoryTableRows, els.historyOpportunitySearch.value);
+  });
 
   els.stepper.addEventListener('click', (e) => {
     const idx = stepIndexFromTarget(e.target);
@@ -175,11 +251,9 @@ export async function mountApp(): Promise<void> {
   });
 
   els.btnReset.addEventListener('click', () => {
-    if (!confirm('¿Borrar todos los datos guardados en este navegador?')) return;
-    clearStorage();
-    state = { draft: {}, history: [], currentStageIndex: 0 };
-    els.leadForm.reset();
-    els.form.documentStatus.value = 'abierto';
+    if (!confirm('¿Vaciar solo los campos del formulario? El historial y la base de datos no se borran.')) return;
+    state = { ...state, draft: {} };
+    writeOpportunityForm(els.form, emptySnapshot());
     ensureDefaultDates(els);
     updateClosingPercentBar(els.form);
     saveState(state);

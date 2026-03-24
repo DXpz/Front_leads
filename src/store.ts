@@ -36,16 +36,16 @@ function saveStateLocal(state: AppState): void {
   localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(state));
 }
 
-async function saveStateRemote(state: AppState): Promise<void> {
+async function putStateToServer(state: AppState): Promise<boolean> {
   try {
     const r = await fetch('/api/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state),
     });
-    if (!r.ok) throw new Error(String(r.status));
+    return r.ok;
   } catch {
-    /* sin API: solo local */
+    return false;
   }
 }
 
@@ -67,7 +67,7 @@ export async function loadState(): Promise<AppState> {
       return server;
     }
     if (isMeaningfulState(local)) {
-      void saveStateRemote(local);
+      void putStateToServer(local);
       return local;
     }
     saveStateLocal(server);
@@ -79,7 +79,7 @@ export async function loadState(): Promise<AppState> {
 
 export function saveState(state: AppState): void {
   saveStateLocal(state);
-  void saveStateRemote(state);
+  void putStateToServer(state);
 }
 
 export function clearStorage(): void {

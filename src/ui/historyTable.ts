@@ -16,19 +16,63 @@ function formatPercent(v: number | ''): string {
   return `${escapeHtml(String(v))}%`;
 }
 
+/** Coincidencia parcial, sin distinguir mayúsculas (número de oportunidad en cada envío). */
+export function filterHistoryByOpportunityNumber(rows: readonly StageEntry[], rawQuery: string): StageEntry[] {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return [...rows];
+  return rows.filter((r) => (r.snapshot.opportunityNumber ?? '').toLowerCase().includes(q));
+}
+
+export type HistoryTableRenderOpts = {
+  /** Total de filas en historial antes de filtrar (para el texto del contador). */
+  totalUnfiltered: number;
+  /** Si hay texto de búsqueda activo (aunque esté vacío tras trim). */
+  filterActive: boolean;
+  /** Sin búsqueda: no se listan filas hasta que el usuario escriba un nº de oportunidad. */
+  idleAwaitingSearch?: boolean;
+};
+
 export function renderHistoryTable(
   tbody: HTMLElement,
   rows: readonly StageEntry[],
   rowCountEl: HTMLElement,
   emptyHintEl: HTMLElement,
+  opts?: HistoryTableRenderOpts,
 ): void {
-  rowCountEl.textContent = `${rows.length} registro${rows.length !== 1 ? 's' : ''}`;
+  if (opts?.idleAwaitingSearch) {
+    rowCountEl.textContent = '—';
+    emptyHintEl.classList.remove('hidden');
+    emptyHintEl.textContent =
+      'Escribe un número de oportunidad para ver el historial guardado en la base de datos.';
+    tbody.innerHTML = '';
+    return;
+  }
+
+  const total = opts?.totalUnfiltered ?? rows.length;
+  const filtered = rows.length;
+  const filterOn = Boolean(opts?.filterActive);
+
+  if (filterOn && total > 0) {
+    rowCountEl.textContent = `${filtered} de ${total} registro${total !== 1 ? 's' : ''}`;
+  } else {
+    rowCountEl.textContent = `${rows.length} registro${rows.length !== 1 ? 's' : ''}`;
+  }
+
   emptyHintEl.classList.toggle('hidden', rows.length > 0);
+  if (rows.length === 0) {
+    emptyHintEl.textContent =
+      total === 0
+        ? 'Sin registros.'
+        : filterOn
+          ? 'Ningún envío coincide con ese número de oportunidad.'
+          : 'Sin registros.';
+  }
 
   tbody.innerHTML = rows
     .map((r, i) => {
       const stage = stageById(r.stageId) ?? { label: r.stageId };
       const s = r.snapshot;
+      const oppNum = (s.opportunityNumber ?? '').trim();
       const safeNotes = escapeHtml(s.notes);
       const shortNotes = safeNotes.length > 60 ? `${safeNotes.slice(0, 60)}…` : safeNotes;
       const submitted = new Date(r.createdAt).toLocaleString('es', {
@@ -44,6 +88,7 @@ export function renderHistoryTable(
       return `
         <tr class="animate-row-in border-b-2 border-ink-200 hover:bg-ink-100">
           <td class="px-2 py-2 font-medium text-ink-500 sm:px-3 sm:py-3">${i + 1}</td>
+          <td class="px-2 py-2 font-mono text-xs font-semibold text-ink-800 sm:px-3 sm:py-3">${oppNum ? escapeHtml(oppNum) : '—'}</td>
           <td class="px-2 py-2 font-semibold text-ink-900 sm:px-3 sm:py-3">${escapeHtml(stage.label)}</td>
           <td class="px-2 py-2 text-ink-600 text-xs whitespace-nowrap sm:px-3 sm:py-3">${escapeHtml(submitted)}</td>
           <td class="px-2 py-2 text-ink-700 max-w-[200px] text-xs sm:px-3 sm:py-3" title="${clientLine}">${clientLine || '—'}</td>

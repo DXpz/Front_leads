@@ -78,10 +78,43 @@ app.put('/api/state', async (req, res) => {
   }
 });
 
+/** Historial leído desde PostgreSQL (payload JSON). ?opportunityNumber= filtra por número de oportunidad. */
+app.get('/api/history', async (req, res) => {
+  try {
+    const needle = String(req.query.opportunityNumber ?? '').trim().toLowerCase();
+    const { rows } = await pool.query<{ payload: unknown }>(
+      'SELECT payload FROM lead_app_state WHERE id = 1',
+    );
+    const row = rows[0];
+    const payload =
+      row?.payload && typeof row.payload === 'object' && row.payload !== null
+        ? (row.payload as Record<string, unknown>)
+        : {};
+    const rawHistory = Array.isArray(payload.history) ? payload.history : [];
+    const total = rawHistory.length;
+    if (!needle) {
+      res.json({ entries: rawHistory, total });
+      return;
+    }
+    const entries = rawHistory.filter((item: unknown) => {
+      if (!item || typeof item !== 'object') return false;
+      const snap = (item as { snapshot?: { opportunityNumber?: unknown } }).snapshot;
+      const num = String(snap?.opportunityNumber ?? '')
+        .trim()
+        .toLowerCase();
+      return num.includes(needle);
+    });
+    res.json({ entries, total });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo leer el historial' });
+  }
+});
+
 async function main(): Promise<void> {
   await ensureSchema();
   app.listen(PORT, () => {
-    console.log(`API PostgreSQL http://localhost:${PORT}  (GET/PUT /api/state)`);
+    console.log(`API PostgreSQL http://localhost:${PORT}  (GET/PUT /api/state, GET /api/history)`);
   });
 }
 

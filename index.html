@@ -7,6 +7,8 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>RED Intelfon — Oportunidades</title>
+    <link rel="icon" type="image/png" href="/logo-red-ptt.png" />
+    <link rel="apple-touch-icon" href="/logo-red-ptt.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -105,7 +107,7 @@
             id="btn-reset"
             class="min-h-[44px] w-full rounded-sm border-2 border-brand-black bg-brand-surface px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-brand-maroon transition hover:bg-brand-redHi hover:text-white sm:min-h-0 sm:w-auto"
           >
-            Limpiar todo
+            Limpiar formulario
           </button>
         </div>
       </header>
@@ -391,15 +393,37 @@
           <h2 class="text-base font-extrabold uppercase tracking-wide">Historial de etapas</h2>
           <p id="row-count" class="text-xs font-bold uppercase tracking-wide text-white/90">0 registros</p>
         </div>
+        <div class="flex flex-col gap-2 border-b-2 border-ink-200 bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-7">
+          <label class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <span class="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-700">Buscar nº oportunidad</span>
+            <input
+              type="search"
+              id="history-opportunity-search"
+              class="input-industrial min-w-0 flex-1 sm:max-w-xs"
+              placeholder="Ej. 1"
+              autocomplete="off"
+              enterkeyhint="search"
+            />
+          </label>
+          <button
+            type="button"
+            id="btn-export-history-csv"
+            disabled
+            class="min-h-[44px] shrink-0 rounded-sm border-2 border-brand-black bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-900 shadow-card transition hover:bg-brand-surface disabled:pointer-events-none sm:min-h-0"
+          >
+            Exportar CSV (vista)
+          </button>
+        </div>
         <div class="p-4 sm:p-7 sm:pt-5">
         <div class="overflow-x-auto border-2 border-ink-300 [-webkit-overflow-scrolling:touch]">
-          <table class="w-full min-w-[1000px] text-left text-sm md:min-w-[1100px]">
+          <table class="w-full min-w-[1060px] text-left text-sm md:min-w-[1160px]">
             <thead>
               <tr
                 class="border-b-2 border-black text-xs font-extrabold uppercase tracking-wide text-white"
                 style="background-color: #145478"
               >
                 <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">#</th>
+                <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Nº oport.</th>
                 <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Etapa</th>
                 <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Enviado</th>
                 <th class="whitespace-nowrap px-2 py-2 sm:px-3 sm:py-3">Cliente</th>
