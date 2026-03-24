@@ -2,45 +2,50 @@ import { STAGES } from '../stages';
 
 const STEP_INDEX_ATTR = 'data-stage-index';
 
-const NAVY = '#145478';
-const LINE_DONE = '#145478';
-const LINE_TODO = '#afacb2';
-
-export function renderStepper(container: HTMLElement, currentIndex: number): void {
+/**
+ * @param previousIndex índice de etapa antes del último cambio; null en la primera pintura (sin animación de llenado).
+ */
+export function renderStepper(
+  container: HTMLElement,
+  currentIndex: number,
+  previousIndex: number | null,
+): void {
   const segments = STAGES.map((s, i) => {
     const done = i < currentIndex;
     const active = i === currentIndex;
 
-    /** Activo: azul marino sólido + número blanco (siempre visible aunque falle Tailwind). */
-    let boxClass =
-      'flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border-2 border-black text-xs font-extrabold sm:h-11 sm:w-11 sm:text-sm';
-    let boxStyle = '';
-    if (active) {
-      boxClass += ' text-white';
-      boxStyle = `background-color:${NAVY};color:#fff`;
-    } else if (done) {
-      boxClass += ' text-white';
-      boxStyle = `background-color:${NAVY};color:#fff`;
-    } else {
-      boxClass += ' bg-white text-ink-900';
-      boxStyle = 'background-color:#ffffff;color:#1a1a1a';
-    }
+    const boxBase =
+      'stepper-box flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border-2 border-black text-xs font-extrabold sm:h-11 sm:w-11 sm:text-sm';
+    const boxState = active
+      ? `${boxBase} stepper-box--fill stepper-box--emphasize`
+      : done
+        ? `${boxBase} stepper-box--fill`
+        : `${boxBase} stepper-box--empty`;
 
-    /** Línea alineada al centro del cuadrado (h-11 = 2.75rem), no de toda la columna con etiqueta variable. */
+    const isLineDone = i < currentIndex;
+    /** Línea entre etapa i e i+1: recién completada al avanzar (para animar llenado). */
+    const lineJustFilled =
+      previousIndex !== null && isLineDone && i >= previousIndex && i < currentIndex;
+    const fillClass = !isLineDone
+      ? 'stepper-line-fill stepper-line-fill--empty'
+      : lineJustFilled
+        ? 'stepper-line-fill stepper-line-fill--grow'
+        : 'stepper-line-fill stepper-line-fill--full';
+
     const line =
       i < STAGES.length - 1
-        ? `<div class="mx-1.5 mt-[1.0625rem] h-1.5 min-w-[1.25rem] shrink-0 rounded-sm sm:mx-2 sm:mt-[1.1875rem] sm:min-w-[2rem]" style="background-color:${
-            i < currentIndex ? LINE_DONE : LINE_TODO
-          }" aria-hidden="true"></div>`
+        ? `<div class="stepper-line-track mx-1.5 mt-[1.0625rem] h-1.5 min-w-[1.25rem] shrink-0 sm:mx-2 sm:mt-[1.1875rem] sm:min-w-[2rem]" aria-hidden="true"><div class="${fillClass}"></div></div>`
         : '';
+
+    const labelClass = `stepper-label min-h-[2.5rem] w-full text-center text-[9px] font-bold uppercase leading-tight tracking-tight sm:min-h-[2.75rem] sm:text-[10px] ${
+      active ? 'stepper-label--active text-[#c8151b]' : 'text-[#404040]'
+    }`;
 
     return `
       <div class="flex shrink-0 items-start">
         <button type="button" ${STEP_INDEX_ATTR}="${i}" class="group flex w-[88px] flex-col items-center gap-1 rounded-sm px-0.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8151b] focus-visible:ring-offset-2 sm:w-[104px] sm:gap-1.5">
-          <span class="${boxClass}"${boxStyle ? ` style="${boxStyle}"` : ''}>${done ? '✓' : s.short}</span>
-          <span class="min-h-[2.5rem] w-full text-center text-[9px] font-bold uppercase leading-tight tracking-tight sm:min-h-[2.75rem] sm:text-[10px] ${
-            active ? 'text-[#c8151b]' : 'text-[#404040]'
-          }">${s.label}</span>
+          <span class="${boxState}">${done ? '✓' : s.short}</span>
+          <span class="${labelClass}">${s.label}</span>
         </button>
         ${line}
       </div>`;

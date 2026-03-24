@@ -121,6 +121,9 @@ async function paintHistoryTable(els: Elements, state: AppState): Promise<void> 
   }
 }
 
+/** Para animar solo el conector que acaba de “llenarse” al cambiar de etapa. */
+let stepperPreviousRenderedIndex: number | null = null;
+
 function scheduleHistoryPaint(els: Elements, state: AppState): void {
   if (historySearchTimer) clearTimeout(historySearchTimer);
   historySearchTimer = setTimeout(() => {
@@ -130,7 +133,8 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
 }
 
 function fullRender(els: Elements, state: AppState): void {
-  renderStepper(els.stepper, state.currentStageIndex);
+  renderStepper(els.stepper, state.currentStageIndex, stepperPreviousRenderedIndex);
+  stepperPreviousRenderedIndex = state.currentStageIndex;
   updateStagePanel(els, state);
   void paintHistoryTable(els, state);
 }
