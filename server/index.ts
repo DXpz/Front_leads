@@ -148,16 +148,38 @@ app.patch('/api/audit/:id/status', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'UPDATE audits SET advisor_status = $1 WHERE id = $2',
+      `
+      UPDATE audits
+      SET advisor_status = $1
+      WHERE id = $2
+      RETURNING id, client_id, client_name, advisor_name, advisor_status, created_at
+      `,
       [status, id],
     );
 
-    if (result.rowCount === 0) {
+    const row = result.rows[0] as
+      | {
+          id: number;
+          client_id: string;
+          client_name: string;
+          advisor_name: string;
+          advisor_status: string;
+          created_at: string;
+        }
+      | undefined;
+
+    if (!row) {
       res.status(404).json({ error: 'Auditoria no encontrada' });
       return;
     }
 
-    res.json({ ok: true, message: `Estado actualizado a ${status}` });
+    res.json({
+      ok: true,
+      message: `Estado actualizado a ${status}`,
+      id: row.id,
+      client_id: row.client_id,
+      advisor_status: row.advisor_status,
+    });
   } catch (e) {
     console.error('Error en PATCH /api/audit/:id/status:', e);
     res.status(500).json({ error: 'Error al actualizar estado' });
@@ -188,17 +210,34 @@ app.patch('/api/audit/client/:client_id/status', async (req, res) => {
       UPDATE audits
       SET advisor_status = $1
       WHERE id IN (SELECT id FROM target)
-      RETURNING id
+      RETURNING id, client_id, client_name, advisor_name, advisor_status, created_at
       `,
       [status, client_id],
     );
 
-    if (result.rowCount === 0) {
+    const row = result.rows[0] as
+      | {
+          id: number;
+          client_id: string;
+          client_name: string;
+          advisor_name: string;
+          advisor_status: string;
+          created_at: string;
+        }
+      | undefined;
+
+    if (!row) {
       res.status(404).json({ error: 'Auditoria no encontrada para ese client_id' });
       return;
     }
 
-    res.json({ ok: true, message: `Estado actualizado a ${status}` });
+    res.json({
+      ok: true,
+      message: `Estado actualizado a ${status}`,
+      id: row.id,
+      client_id: row.client_id,
+      advisor_status: row.advisor_status,
+    });
   } catch (e) {
     console.error('Error en PATCH /api/audit/client/:client_id/status:', e);
     res.status(500).json({ error: 'Error al actualizar estado' });
