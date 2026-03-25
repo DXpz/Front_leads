@@ -264,4 +264,49 @@
   }
 }
 
+/* Modal agenda */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal-backdrop.hidden {
+  display: none !important;
+}
+.modal-card {
+  width: min(900px, 100%);
+  margin-top: 4vh;
+  border: 2px solid #000;
+  border-left-width: 6px;
+  border-left-color: #c8151b;
+  background: #fff;
+  box-shadow: 8px 8px 0 0 rgba(0, 0, 0, 0.18);
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: #145478;
+  color: #fff;
+}
+.modal-x {
+  height: 40px;
+  width: 40px;
+  border: 2px solid #000;
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+  font-weight: 900;
+  font-size: 20px;
+  line-height: 1;
+}
+.modal-body {
+  padding: 1rem;
+}
 /* Observaciones se reubica por JS al abrir/cerrar Cliente */

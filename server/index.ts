@@ -72,6 +72,26 @@ async function ensureSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS advisor_status TEXT NOT NULL DEFAULT 'pending';
   `);
   await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'opportunity_number_seq') THEN
+        CREATE SEQUENCE opportunity_number_seq START 1;
+      END IF;
+    END $$;
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS opportunity_activities (
+      id UUID PRIMARY KEY,
+      opportunity_number TEXT NOT NULL REFERENCES opportunity_directory(opportunity_number) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      scheduled_at TIMESTAMPTZ NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS opportunity_activities_by_opp
+      ON opportunity_activities (opportunity_number, scheduled_at);
+  `);
+  await pool.query(`
     INSERT INTO lead_app_state (id, payload)
     VALUES (1, $1::jsonb)
     ON CONFLICT (id) DO NOTHING;
@@ -480,6 +500,94 @@ app.put('/api/opportunity', async (req, res) => {
   }
 });
 
+/** Devuelve el próximo número de oportunidad (autonumérico). */
+app.get('/api/opportunity/next-number', async (_req, res) => {
+  try {
+    const { rows } = await pool.query<{ n: string }>(`SELECT nextval('opportunity_number_seq')::text as n`);
+    res.json({ opportunityNumber: rows[0]?.n ?? '' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo generar número' });
+  }
+});
+
+type OpportunityActivityRow = {
+  id: string;
+  opportunity_number: string;
+  title: string;
+  scheduled_at: string;
+  notes: string;
+  created_at: string;
+};
+
+/** Lista actividades por nº de oportunidad. */
+app.get('/api/activities', async (req, res) => {
+  try {
+    const num = normKey(String(req.query.number ?? ''));
+    if (!num) {
+      res.status(400).json({ error: 'Falta number' });
+      return;
+    }
+    const { rows } = await pool.query<OpportunityActivityRow>(
+      `SELECT id, opportunity_number, title, scheduled_at, notes, created_at
+       FROM opportunity_activities
+       WHERE opportunity_number = $1
+       ORDER BY scheduled_at ASC`,
+      [num],
+    );
+    res.json({ entries: rows, count: rows.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo leer actividades' });
+  }
+});
+
+/** Crea una actividad asociada a una oportunidad. */
+app.post('/api/activities', async (req, res) => {
+  try {
+    const body = req.body as unknown;
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ error: 'JSON inválido' });
+      return;
+    }
+    const b = body as Record<string, unknown>;
+    const id = normKey(String(b.id ?? ''));
+    const opportunityNumber = normKey(String(b.opportunityNumber ?? ''));
+    const title = String(b.title ?? '').trim();
+    const scheduledAt = String(b.scheduledAt ?? '').trim();
+    const notes = String(b.notes ?? '').trim();
+    if (!id || !opportunityNumber || !title || !scheduledAt) {
+      res.status(400).json({ error: 'Faltan campos' });
+      return;
+    }
+    await pool.query(
+      `INSERT INTO opportunity_activities (id, opportunity_number, title, scheduled_at, notes)
+       VALUES ($1, $2, $3, $4::timestamptz, $5)`,
+      [id, opportunityNumber, title, scheduledAt, notes],
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo guardar actividad' });
+  }
+});
+
+/** Borra una actividad por id. */
+app.delete('/api/activities/:id', async (req, res) => {
+  try {
+    const id = normKey(String(req.params.id ?? ''));
+    if (!id) {
+      res.status(400).json({ error: 'Falta id' });
+      return;
+    }
+    await pool.query('DELETE FROM opportunity_activities WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'no se pudo borrar actividad' });
+  }
+});
+
 /** Historial leído desde PostgreSQL (payload JSON). ?opportunityNumber= filtra por número de oportunidad. */
 app.get('/api/history', async (req, res) => {
   try {
@@ -518,7 +626,7 @@ async function main(): Promise<void> {
   startMeetingAuditor();
   app.listen(PORT, () => {
     console.log(
-      `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, POST /api/audit, PATCH /api/audit/:id/status)`,
+      `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, GET /api/opportunity/next-number, /api/activities, POST /api/audit, PATCH /api/audit/:id/status)`,
     );
   });
 }
