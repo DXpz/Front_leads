@@ -1,7 +1,8 @@
 import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
-import pg from 'pg';
+import { pool } from '../db/index.js';
+import { startMeetingAuditor } from './auditor.js';
 
 const PORT = Number(process.env.PORT) || 3001;
 const databaseUrl = process.env.DATABASE_URL;
@@ -10,8 +11,6 @@ if (!databaseUrl) {
   console.error('Falta DATABASE_URL en .env (ej. postgresql://postgres:postgres@localhost:5433/formulario_leads)');
   process.exit(1);
 }
-
-const pool = new pg.Pool({ connectionString: databaseUrl });
 
 const defaultPayload = () =>
   ({
@@ -399,6 +398,7 @@ app.get('/api/history', async (req, res) => {
 
 async function main(): Promise<void> {
   await ensureSchema();
+  startMeetingAuditor();
   app.listen(PORT, () => {
     console.log(
       `API PostgreSQL http://localhost:${PORT} (GET/PUT /api/state, GET /api/history, GET/PUT /api/opportunity, POST /api/audit, PATCH /api/audit/:id/status)`,
