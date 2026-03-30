@@ -11,3 +11,28 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+function withNgrokBypass(url: string): string {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.hostname.endsWith('ngrok-free.dev') && !u.searchParams.has('ngrok-skip-browser-warning')) {
+      u.searchParams.set('ngrok-skip-browser-warning', 'true');
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Wrapper común para API:
+ * - añade bypass del warning de ngrok free.
+ * - mantiene flexibilidad de headers del caller.
+ */
+export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers ?? {});
+  if (!headers.has('ngrok-skip-browser-warning')) {
+    headers.set('ngrok-skip-browser-warning', 'true');
+  }
+  return fetch(withNgrokBypass(apiUrl(path)), { ...init, headers });
+}
+

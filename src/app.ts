@@ -2,7 +2,7 @@ import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
 import { emptySnapshot, normalizeHistoryRow } from './migrate';
 import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
-import { apiUrl } from './api';
+import { apiFetch } from './api';
 import { isoDatetimeToDateInputValue, todayIsoDate } from './utils/format';
 import { escapeHtml } from './utils/escapeHtml';
 import { downloadHistoryCsv } from './utils/historyCsv';
@@ -301,7 +301,7 @@ async function refreshSellerNameDatalist(): Promise<void> {
   const dl = document.getElementById('seller-name-list');
   if (!dl || !(dl instanceof HTMLDataListElement)) return;
   try {
-    const r = await fetch(apiUrl('/api/metrics/lista-asesores'));
+    const r = await apiFetch('/api/metrics/lista-asesores');
     if (!r.ok) return;
     const data = (await r.json()) as { asesores?: { asesor?: string }[] };
     const rows = Array.isArray(data.asesores) ? data.asesores : [];
@@ -329,7 +329,7 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
     return;
   }
   try {
-    const r = await fetch(apiUrl(`/api/audit/by-client/${encodeURIComponent(cid)}`));
+    const r = await apiFetch(`/api/audit/by-client/${encodeURIComponent(cid)}`);
     if (!r.ok) {
       crmOpportunityStageIndexFromApi = -1;
       return;
@@ -374,7 +374,7 @@ async function loadAllStageData(oppNumber: string): Promise<Record<string, Recor
   if (!oppNumber) return {};
   const needle = oppNumber.trim().toLowerCase();
   try {
-    const r = await fetch(apiUrl('/api/state'));
+    const r = await apiFetch('/api/state');
     if (!r.ok) return {};
     const body = (await r.json()) as { history?: unknown[] };
     const rawHistory = Array.isArray(body.history) ? body.history : [];
@@ -421,7 +421,7 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   opportunityLookupLastKey = key;
 
   try {
-    const r = await fetch(apiUrl(`/api/opportunity?number=${encodeURIComponent(key)}`));
+    const r = await apiFetch(`/api/opportunity?number=${encodeURIComponent(key)}`);
     if (r.ok) {
       const d = (await r.json()) as OpportunityDirectory;
       if (d && typeof d === 'object') {
@@ -621,11 +621,11 @@ async function paintHistoryTable(els: Elements, state: AppState): Promise<void> 
   try {
     const q = encodeURIComponent(trimmed);
     const merge = '&mergeAudit=1';
-    let r = await fetch(apiUrl(`/api/history?opportunityNumber=${q}${merge}`));
+    let r = await apiFetch(`/api/history?opportunityNumber=${q}${merge}`);
     if (!r.ok) throw new Error('api');
     let data = (await r.json()) as { entries: unknown[]; total: number };
     if (!data.entries?.length) {
-      const r2 = await fetch(apiUrl(`/api/history?clientId=${q}${merge}`));
+      const r2 = await apiFetch(`/api/history?clientId=${q}${merge}`);
       if (r2.ok) {
         data = (await r2.json()) as { entries: unknown[]; total: number };
       }
@@ -1051,7 +1051,7 @@ export async function mountApp(): Promise<void> {
       }
 
       if (snapshot.opportunityNumber.trim()) {
-        void fetch(apiUrl('/api/opportunity'), {
+        void apiFetch('/api/opportunity', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
