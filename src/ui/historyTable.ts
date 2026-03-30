@@ -16,11 +16,17 @@ function formatPercent(v: number | ''): string {
   return `${escapeHtml(String(v))}%`;
 }
 
-/** Coincidencia parcial, sin distinguir mayúsculas (número de oportunidad en cada envío). */
+/** Coincidencia como GET /api/history: substring en nº oportunidad o igualdad en clientId. */
 export function filterHistoryByOpportunityNumber(rows: readonly StageEntry[], rawQuery: string): StageEntry[] {
   const q = rawQuery.trim().toLowerCase();
   if (!q) return [...rows];
-  return rows.filter((r) => (r.snapshot.opportunityNumber ?? '').toLowerCase().includes(q));
+  return rows.filter((r) => {
+    const on = (r.snapshot.opportunityNumber ?? '').trim().toLowerCase();
+    const cid = (r.snapshot.clientId ?? '').trim().toLowerCase();
+    if (on.includes(q)) return true;
+    if (cid === q || on === q) return true;
+    return false;
+  });
 }
 
 export type HistoryTableRenderOpts = {

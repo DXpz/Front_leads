@@ -57,6 +57,10 @@ export function snapshotFromUnknown(raw: unknown): OpportunityForm {
   s.displaySystemCurrency = Boolean(r.displaySystemCurrency);
   s.opportunityName = str('opportunityName', 'oppName');
   s.opportunityNumber = str('opportunityNumber');
+  {
+    const cid = str('clientId', 'client_id');
+    s.clientId = cid || (s.opportunityNumber ? s.opportunityNumber : undefined);
+  }
   s.documentStatus = typeof r.documentStatus === 'string' && r.documentStatus ? r.documentStatus : s.documentStatus;
   s.opportunityStartDate = str('opportunityStartDate', 'startDate');
   s.opportunityClosingDate = str('opportunityClosingDate', 'endDate');

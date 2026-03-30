@@ -1,23 +1,27 @@
 import { STAGES, STAGE_COUNT } from './stages';
-import type { AppState, OpportunityForm, StageEntry } from './types';
+import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
 import { emptySnapshot, normalizeHistoryRow } from './migrate';
-import { loadState, saveState, saveStateLocal } from './store';
+import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
 import { apiUrl } from './api';
-import { todayIsoDate } from './utils/format';
+import { isoDatetimeToDateInputValue, todayIsoDate } from './utils/format';
+import { escapeHtml } from './utils/escapeHtml';
 import { downloadHistoryCsv } from './utils/historyCsv';
 import { renderStepper, stepIndexFromTarget } from './ui/stepper';
 import { filterHistoryByOpportunityNumber, renderHistoryTable } from './ui/historyTable';
 import {
   queryOpportunityFormElements,
   readOpportunityForm,
+  setLeadFormFieldsReadonly,
   updateClosingPercentBar,
   writeOpportunityForm,
   type OpportunityFormElements,
 } from './opportunityForm';
 import { renderStageQuestions, readStageQuestionValues } from './stageQuestions';
 
-/** Envía un evento a la bitácora (POST /api/logs). Fire-and-forget. */
-function logEvent(payload: {
+const SESSION_CLIENT_KEY = 'lead-session-client-id';
+
+/** La API local no expone POST /api/logs; se deja el hook por si se añade telemetría más adelante. */
+function logEvent(_payload: {
   opportunityNumber?: string;
   eventType: string;
   stageId?: string;
@@ -29,11 +33,7 @@ function logEvent(payload: {
   metadata?: Record<string, unknown>;
   durationSeconds?: number;
 }): void {
-  void fetch(apiUrl('/api/logs'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }).catch(() => void 0);
+  /* noop */
 }
 
 /** Timestamp de cuando se empezó a trabajar en la etapa actual (para calcular duración). */
@@ -47,6 +47,77 @@ function stageAutoClosingPercent(stageIndex: number): number {
 function syncClosingPercentToStage(els: Elements, stageIndex: number): void {
   els.form.closingPercent.value = String(stageAutoClosingPercent(stageIndex));
   updateClosingPercentBar(els.form);
+}
+
+/** Índice de etapa CRM 0..5 desde GET /api/audit (-1 = sin dato). */
+let crmOpportunityStageIndexFromApi = -1;
+
+/** Progreso mostrado en stepper / barra: prioriza `opportunity_stage` de la API. */
+let stepperPreviousProgressIndex: number | null = null;
+
+function historyMaxStageIndex(history: readonly StageEntry[]): number {
+  let m = -1;
+  for (const e of history) {
+    const ix = STAGES.findIndex((s) => s.id === e.stageId);
+    if (ix > m) m = ix;
+  }
+  return m;
+}
+
+function effectiveProgressIndex(state: AppState): number {
+  if (crmOpportunityStageIndexFromApi >= 0) {
+    return crmOpportunityStageIndexFromApi;
+  }
+  const h = historyMaxStageIndex(state.history);
+  return Math.max(0, h);
+}
+
+/** Tope del embudo alcanzado (para saber qué etapa sigue editable). */
+function furthestReachedStageIndex(state: AppState): number {
+  const h = historyMaxStageIndex(state.history);
+  if (crmOpportunityStageIndexFromApi >= 0) {
+    return Math.max(h, crmOpportunityStageIndexFromApi);
+  }
+  return h;
+}
+
+function isCurrentStageEditable(state: AppState): boolean {
+  const f = furthestReachedStageIndex(state);
+  if (f < 0) return true;
+  return state.currentStageIndex === f;
+}
+
+function mergeLoadedCacheFromStateHistory(state: AppState, oppKey: string): void {
+  const needle = oppKey.trim().toLowerCase();
+  if (!needle) return;
+  for (const e of state.history) {
+    const sn = (e.snapshot.opportunityNumber ?? '').trim().toLowerCase();
+    const sc = (e.snapshot.clientId ?? '').trim().toLowerCase();
+    if (sn !== needle && sc !== needle) continue;
+    loadedStageDataCache[e.stageId] = { ...e.snapshot.stageData };
+  }
+}
+
+function latestSnapshotForStageIndex(
+  history: readonly StageEntry[],
+  oppKey: string,
+  stageIndex: number,
+): OpportunityForm | null {
+  const needle = oppKey.trim().toLowerCase();
+  if (!needle) return null;
+  const sid = STAGES[stageIndex]?.id as StageId | undefined;
+  if (!sid) return null;
+  let best: StageEntry | null = null;
+  for (const e of history) {
+    if (e.stageId !== sid) continue;
+    const sn = (e.snapshot.opportunityNumber ?? '').trim().toLowerCase();
+    const sc = (e.snapshot.clientId ?? '').trim().toLowerCase();
+    if (sn !== needle && sc !== needle) continue;
+    if (!best || e.createdAt > best.createdAt) best = e;
+  }
+  return best
+    ? { ...best.snapshot, stageData: { ...best.snapshot.stageData } }
+    : null;
 }
 
 type Elements = {
@@ -82,6 +153,14 @@ type Elements = {
   stageQuestionsPanel: HTMLElement;
   stageQuestionsTitle: HTMLElement;
   stageQuestionsContainer: HTMLElement;
+  btnSubmitStage: HTMLButtonElement;
+  clientGate: HTMLElement;
+  appWorkspace: HTMLElement;
+  gateClientId: HTMLInputElement;
+  gateContinue: HTMLButtonElement;
+  gateHint: HTMLElement;
+  btnChangeClientId: HTMLButtonElement;
+  pageHeader: HTMLElement;
 };
 
 function queryElements(): Elements {
@@ -123,11 +202,70 @@ function queryElements(): Elements {
     stageQuestionsPanel: q('stage-questions-panel'),
     stageQuestionsTitle: q('stage-questions-title'),
     stageQuestionsContainer: q('stage-questions-container'),
+    btnSubmitStage: q<HTMLButtonElement>('btn-submit-stage'),
+    clientGate: q('client-id-gate'),
+    appWorkspace: q('app-workspace'),
+    gateClientId: q<HTMLInputElement>('gate-client-id'),
+    gateContinue: q<HTMLButtonElement>('gate-continue'),
+    gateHint: q('gate-hint'),
+    btnChangeClientId: q<HTMLButtonElement>('btn-change-client-id'),
+    pageHeader: q('app-page-header'),
   };
+}
+
+function readUrlClientIdParam(): string {
+  try {
+    const v = new URLSearchParams(window.location.search).get('client_id');
+    return (v ?? '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function setGateVisibility(els: Elements, gateActive: boolean): void {
+  els.clientGate.classList.toggle('hidden', !gateActive);
+  els.appWorkspace.classList.toggle('hidden', gateActive);
+  els.pageHeader.classList.toggle('hidden', gateActive);
+  els.btnChangeClientId.classList.toggle('hidden', gateActive);
+}
+
+/** Historial: mismo criterio que el número de oportunidad / client_id. */
+function syncHistorySearchWithOpportunity(els: Elements, state: AppState): void {
+  const n = els.form.opportunityNumber.value.trim();
+  if (!n) return;
+  els.historyOpportunitySearch.value = n;
+  void paintHistoryTable(els, state);
+}
+
+async function applyClientIdAndOpenWorkspace(
+  els: Elements,
+  state: AppState,
+  rawId: string,
+): Promise<AppState> {
+  const id = rawId.trim();
+  if (!id) {
+    els.gateHint.textContent = 'Escribe el ID del cliente para continuar.';
+    return state;
+  }
+  els.gateHint.textContent = '';
+  sessionStorage.setItem(SESSION_CLIENT_KEY, id);
+  els.gateClientId.value = id;
+  mergeLoadedCacheFromStateHistory(state, id);
+  writeOpportunityForm(els.form, state.draft);
+  els.form.opportunityNumber.value = id;
+  ensureDefaultDates(els);
+  setGateVisibility(els, false);
+  opportunityLookupLastKey = '';
+  let s = await lookupOpportunityAndFill(els, state);
+  s = persistDraft(els, s);
+  fullRender(els, s);
+  syncHistorySearchWithOpportunity(els, s);
+  return s;
 }
 
 /** Guarda el borrador solo en localStorage (sin llamar a la API). */
 function persistDraft(els: Elements, state: AppState): AppState {
+  if (!isCurrentStageEditable(state)) return state;
   const stage = STAGES[state.currentStageIndex];
   const stageData = stage ? readStageQuestionValues(stage.id) : {};
   const next: AppState = {
@@ -158,16 +296,115 @@ function fillIfEmpty(input: HTMLInputElement, value: string): void {
   input.value = value;
 }
 
+/** Nombres de asesor conocidos en `audits` (documentado: GET /api/metrics/lista-asesores). */
+async function refreshSellerNameDatalist(): Promise<void> {
+  const dl = document.getElementById('seller-name-list');
+  if (!dl || !(dl instanceof HTMLDataListElement)) return;
+  try {
+    const r = await fetch(apiUrl('/api/metrics/lista-asesores'));
+    if (!r.ok) return;
+    const data = (await r.json()) as { asesores?: { asesor?: string }[] };
+    const rows = Array.isArray(data.asesores) ? data.asesores : [];
+    const options = rows
+      .map((row) => {
+        const v = String(row.asesor ?? '').trim();
+        if (!v || v === '(sin asesor)') return '';
+        return `<option value="${escapeHtml(v)}"></option>`;
+      })
+      .join('');
+    dl.innerHTML = options;
+  } catch {
+    /* API no disponible: el campo sigue siendo texto libre */
+  }
+}
+
+/**
+ * Última auditoría para `client_id` (GET /api/audit/by-client/…): complementa directorio
+ * con asunto, descripción, país, fechas de reunión, etc.
+ */
+async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): Promise<void> {
+  const cid = clientKey.trim();
+  if (!cid) {
+    crmOpportunityStageIndexFromApi = -1;
+    return;
+  }
+  try {
+    const r = await fetch(apiUrl(`/api/audit/by-client/${encodeURIComponent(cid)}`));
+    if (!r.ok) {
+      crmOpportunityStageIndexFromApi = -1;
+      return;
+    }
+    const body = (await r.json()) as { audit?: Record<string, unknown> };
+    const a = body.audit;
+    if (!a || typeof a !== 'object') {
+      crmOpportunityStageIndexFromApi = -1;
+      return;
+    }
+    {
+      const rawSt = a.opportunity_stage;
+      let stn = typeof rawSt === 'number' ? rawSt : parseInt(String(rawSt ?? '1'), 10);
+      if (!Number.isFinite(stn)) stn = 1;
+      stn = Math.max(1, Math.min(6, stn));
+      crmOpportunityStageIndexFromApi = stn - 1;
+    }
+    fillIfEmpty(els.form.clientName, String(a.client_name ?? ''));
+    fillIfEmpty(els.form.clientEmail, String(a.client_email ?? ''));
+    fillIfEmpty(els.form.clientPhone, String(a.client_phone ?? ''));
+    fillIfEmpty(els.form.sellerName, String(a.advisor_name ?? ''));
+    fillIfEmpty(els.form.opportunityName, String(a.subject ?? ''));
+    const st = isoDatetimeToDateInputValue(a.start_time as string | undefined);
+    const en = isoDatetimeToDateInputValue(a.end_time as string | undefined);
+    if (st) fillIfEmpty(els.form.opportunityStartDate, st);
+    if (en) fillIfEmpty(els.form.opportunityClosingDate, en);
+    fillIfEmpty(els.form.territory, String(a.country ?? ''));
+    fillIfEmpty(els.form.notes, String(a.description ?? ''));
+    if (a.id != null && String(a.id).trim() !== '') {
+      fillIfEmpty(els.form.relatedDocNumber, String(a.id));
+    }
+  } catch {
+    crmOpportunityStageIndexFromApi = -1;
+  }
+}
+
 /** Cache local de datos de etapa cargados desde BD (por oportunidad). */
 let loadedStageDataCache: Record<string, Record<string, string>> = {};
 
+/** Reconstruye respuestas por etapa desde el historial en `lead_app_state` (no hay GET /api/stage-data en la API). */
 async function loadAllStageData(oppNumber: string): Promise<Record<string, Record<string, string>>> {
   if (!oppNumber) return {};
+  const needle = oppNumber.trim().toLowerCase();
   try {
-    const r = await fetch(apiUrl(`/api/stage-data?number=${encodeURIComponent(oppNumber)}`));
+    const r = await fetch(apiUrl('/api/state'));
     if (!r.ok) return {};
-    const json = (await r.json()) as { stages?: Record<string, Record<string, string>> };
-    return json.stages ?? {};
+    const body = (await r.json()) as { history?: unknown[] };
+    const rawHistory = Array.isArray(body.history) ? body.history : [];
+    const byStage: Record<string, Record<string, string>> = {};
+    for (const item of rawHistory) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as {
+        stageId?: string;
+        snapshot?: { opportunityNumber?: string; stageData?: Record<string, string> };
+      };
+      const snap = row.snapshot;
+      if (!snap) continue;
+      const num = String(snap.opportunityNumber ?? '')
+        .trim()
+        .toLowerCase();
+      const cid = String(
+        (snap as { clientId?: string; client_id?: string }).clientId ??
+          (snap as { client_id?: string }).client_id ??
+          '',
+      )
+        .trim()
+        .toLowerCase();
+      if (num !== needle && cid !== needle) continue;
+      const sid = row.stageId;
+      const sd = snap.stageData;
+      if (sid && sd && typeof sd === 'object') {
+        byStage[sid] = { ...sd };
+      }
+    }
+    return byStage;
   } catch {
     return {};
   }
@@ -175,34 +412,63 @@ async function loadAllStageData(oppNumber: string): Promise<Record<string, Recor
 
 async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise<AppState> {
   const key = els.form.opportunityNumber.value.trim();
-  if (!key) return state;
+  if (!key) {
+    opportunityLookupLastKey = '';
+    crmOpportunityStageIndexFromApi = -1;
+    return state;
+  }
   if (key === opportunityLookupLastKey) return state;
   opportunityLookupLastKey = key;
 
   try {
     const r = await fetch(apiUrl(`/api/opportunity?number=${encodeURIComponent(key)}`));
-    if (!r.ok) return state;
-    const d = (await r.json()) as OpportunityDirectory;
-    if (!d || typeof d !== 'object') return state;
-    fillIfEmpty(els.form.clientName, d.clientName ?? '');
-    fillIfEmpty(els.form.clientEmail, d.clientEmail ?? '');
-    fillIfEmpty(els.form.clientPhone, d.clientPhone ?? '');
-    fillIfEmpty(els.form.sellerName, d.sellerName ?? '');
+    if (r.ok) {
+      const d = (await r.json()) as OpportunityDirectory;
+      if (d && typeof d === 'object') {
+        fillIfEmpty(els.form.clientName, d.clientName ?? '');
+        fillIfEmpty(els.form.clientEmail, d.clientEmail ?? '');
+        fillIfEmpty(els.form.clientPhone, d.clientPhone ?? '');
+        fillIfEmpty(els.form.sellerName, d.sellerName ?? '');
+      }
+    }
   } catch {
     /* ignore */
   }
 
-  // Carga datos de todas las etapas para esta oportunidad.
+  await fillFromLatestAuditByClientId(els, key);
   loadedStageDataCache = await loadAllStageData(key);
+  mergeLoadedCacheFromStateHistory(state, key);
 
-  // Aplica los datos de la etapa actual al formulario.
-  const currentStage = STAGES[state.currentStageIndex];
-  if (currentStage && loadedStageDataCache[currentStage.id]) {
-    state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[currentStage.id] } };
-    renderCurrentStageQuestions(els, state);
+  if (crmOpportunityStageIndexFromApi >= 0) {
+    const tIdx = crmOpportunityStageIndexFromApi;
+    const snap = latestSnapshotForStageIndex(state.history, key, tIdx);
+    state = { ...state, currentStageIndex: tIdx };
+    if (snap) {
+      state = { ...state, draft: snap };
+      writeOpportunityForm(els, snap);
+    } else {
+      const st = STAGES[tIdx];
+      const sd = st ? loadedStageDataCache[st.id] ?? {} : {};
+      state = { ...state, draft: { ...state.draft, stageData: { ...sd } } };
+    }
+  } else {
+    const cur = STAGES[state.currentStageIndex];
+    if (cur && loadedStageDataCache[cur.id]) {
+      state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[cur.id] ?? {} } };
+    }
   }
 
   return state;
+}
+
+const OPP_SEQ_KEY = 'formulario-leads-opp-seq';
+
+function nextLocalOpportunityNumber(): string {
+  let n = parseInt(localStorage.getItem(OPP_SEQ_KEY) || '0', 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  n += 1;
+  localStorage.setItem(OPP_SEQ_KEY, String(n));
+  return String(n);
 }
 
 async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
@@ -212,11 +478,7 @@ async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
   if (!els.form.opportunityName.value.trim()) return;
   opportunityAutoNumberInFlight = true;
   try {
-    const r = await fetch('/api/opportunity/next-number');
-    if (!r.ok) return;
-    const data = (await r.json()) as { opportunityNumber?: string };
-    const n = String(data?.opportunityNumber ?? '').trim();
-    if (!n) return;
+    const n = nextLocalOpportunityNumber();
     if (!els.form.opportunityNumber.value.trim()) {
       els.form.opportunityNumber.value = n;
     }
@@ -233,6 +495,33 @@ type ActivityDto = {
   notes: string;
   created_at: string;
 };
+
+/** La API no incluye CRUD de actividades; se persisten en localStorage por número de oportunidad. */
+const ACTIVITIES_STORAGE_KEY = 'formulario-leads-activities-v1';
+type ActivitiesStore = Record<string, ActivityDto[]>;
+
+function readActivitiesStore(): ActivitiesStore {
+  try {
+    const raw = localStorage.getItem(ACTIVITIES_STORAGE_KEY);
+    if (!raw) return {};
+    const p = JSON.parse(raw) as unknown;
+    return p && typeof p === 'object' ? (p as ActivitiesStore) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getActivitiesForOpp(num: string): ActivityDto[] {
+  const all = readActivitiesStore();
+  const list = all[num];
+  return Array.isArray(list) ? list : [];
+}
+
+function setActivitiesForOpp(num: string, entries: ActivityDto[]): void {
+  const all = readActivitiesStore();
+  all[num] = entries;
+  localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(all));
+}
 
 function openActivitiesModal(els: Elements): void {
   els.activitiesModal.classList.remove('hidden');
@@ -264,13 +553,12 @@ async function refreshActivities(els: Elements): Promise<void> {
     return;
   }
   try {
-    const r = await fetch(`/api/activities?number=${encodeURIComponent(num)}`);
-    if (!r.ok) throw new Error('bad');
-    const data = (await r.json()) as { entries: ActivityDto[]; count: number };
-    els.form.openActivitiesCount.value = String(data.count ?? 0);
-    els.activitiesEmpty.classList.toggle('hidden', (data.count ?? 0) > 0);
-    els.activitiesList.innerHTML = (data.entries ?? [])
-      .map((a) => {
+    const entries = getActivitiesForOpp(num);
+    const count = entries.length;
+    els.form.openActivitiesCount.value = String(count);
+    els.activitiesEmpty.classList.toggle('hidden', count > 0);
+    els.activitiesList.innerHTML = entries
+      .map((a: ActivityDto) => {
         const title = a.title ?? '';
         const when = formatWhen(a.scheduled_at);
         const notes = (a.notes ?? '').trim();
@@ -293,11 +581,14 @@ async function refreshActivities(els: Elements): Promise<void> {
   }
 }
 
-function updateStagePanel(els: Elements, state: AppState): void {
+function updateStagePanel(els: Elements, state: AppState, readOnly: boolean): void {
   const s = STAGES[state.currentStageIndex];
   if (!s) return;
   els.stageTitle.textContent = s.label;
-  els.stageBadge.textContent = `Paso ${state.currentStageIndex + 1} de ${STAGE_COUNT}`;
+  const prog = effectiveProgressIndex(state);
+  els.stageBadge.textContent = readOnly
+    ? `Revisión paso ${state.currentStageIndex + 1} · CRM paso ${prog + 1}`
+    : `Paso ${state.currentStageIndex + 1} de ${STAGE_COUNT} · Avance CRM ${prog + 1}/${STAGE_COUNT}`;
   els.stageBadge.className = `inline-flex w-fit items-center rounded-sm border-2 border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white ${s.color}`;
 }
 
@@ -328,9 +619,17 @@ async function paintHistoryTable(els: Elements, state: AppState): Promise<void> 
   }
 
   try {
-    const r = await fetch(apiUrl(`/api/history?opportunityNumber=${encodeURIComponent(trimmed)}`));
+    const q = encodeURIComponent(trimmed);
+    const merge = '&mergeAudit=1';
+    let r = await fetch(apiUrl(`/api/history?opportunityNumber=${q}${merge}`));
     if (!r.ok) throw new Error('api');
-    const data = (await r.json()) as { entries: unknown[]; total: number };
+    let data = (await r.json()) as { entries: unknown[]; total: number };
+    if (!data.entries?.length) {
+      const r2 = await fetch(apiUrl(`/api/history?clientId=${q}${merge}`));
+      if (r2.ok) {
+        data = (await r2.json()) as { entries: unknown[]; total: number };
+      }
+    }
     const rows = data.entries
       .map((e) => normalizeHistoryRow(e))
       .filter((x): x is StageEntry => x !== null);
@@ -362,25 +661,42 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
   }, 280);
 }
 
-function renderCurrentStageQuestions(els: Elements, state: AppState): void {
+function renderCurrentStageQuestions(els: Elements, state: AppState, readOnly: boolean): void {
   const stage = STAGES[state.currentStageIndex];
   if (!stage) return;
-  els.stageQuestionsTitle.textContent = `Preguntas — ${stage.label}`;
-  // Prioridad: draft local > cache BD > vacío.
+  els.stageQuestionsTitle.textContent = readOnly
+    ? `Preguntas — ${stage.label} (solo lectura)`
+    : `Preguntas — ${stage.label}`;
   const stageData = state.draft.stageData ?? loadedStageDataCache[stage.id] ?? {};
-  renderStageQuestions(
-    els.stageQuestionsContainer,
-    stage.id,
-    stageData,
-  );
+  renderStageQuestions(els.stageQuestionsContainer, stage.id, stageData, readOnly);
+}
+
+function applyStageViewLock(els: Elements, state: AppState): void {
+  const ro = !isCurrentStageEditable(state);
+  setLeadFormFieldsReadonly(els.form, ro);
+  els.advanceNext.disabled = ro;
+  els.btnSubmitStage.disabled = ro;
+  els.btnReset.disabled = ro;
+  els.btnOpenActivities.disabled = ro;
+  els.stageQuestionsPanel.classList.toggle('opacity-95', ro);
 }
 
 function fullRender(els: Elements, state: AppState): void {
-  syncClosingPercentToStage(els, state.currentStageIndex);
-  renderStepper(els.stepper, state.currentStageIndex, stepperPreviousRenderedIndex);
+  const progressIdx = effectiveProgressIndex(state);
+  syncClosingPercentToStage(els, progressIdx);
+  const ro = !isCurrentStageEditable(state);
+  renderStepper(
+    els.stepper,
+    state.currentStageIndex,
+    progressIdx,
+    stepperPreviousRenderedIndex,
+    stepperPreviousProgressIndex,
+  );
   stepperPreviousRenderedIndex = state.currentStageIndex;
-  updateStagePanel(els, state);
-  renderCurrentStageQuestions(els, state);
+  stepperPreviousProgressIndex = progressIdx;
+  updateStagePanel(els, state, ro);
+  renderCurrentStageQuestions(els, state, ro);
+  applyStageViewLock(els, state);
   void paintHistoryTable(els, state);
 }
 
@@ -410,10 +726,38 @@ export async function mountApp(): Promise<void> {
   const els = queryElements();
   let state: AppState = await loadState();
 
-  writeOpportunityForm(els.form, state.draft);
-  syncClosingPercentToStage(els, state.currentStageIndex);
-  ensureDefaultDates(els);
-  fullRender(els, state);
+  void refreshSellerNameDatalist();
+
+  const urlClientId = readUrlClientIdParam();
+  const sessionId = (sessionStorage.getItem(SESSION_CLIENT_KEY) ?? '').trim();
+  const draftOpp = (state.draft.opportunityNumber ?? '').trim();
+  const suggestedId = (urlClientId || sessionId || draftOpp).trim();
+  if (suggestedId) els.gateClientId.value = suggestedId;
+
+  setGateVisibility(els, true);
+  requestAnimationFrame(() => els.gateClientId.focus());
+
+  els.gateContinue.addEventListener('click', () => {
+    void applyClientIdAndOpenWorkspace(els, state, els.gateClientId.value).then((s) => {
+      state = s;
+    });
+  });
+  els.gateClientId.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      els.gateContinue.click();
+    }
+  });
+  els.btnChangeClientId.addEventListener('click', () => {
+    sessionStorage.removeItem(SESSION_CLIENT_KEY);
+    const prev = els.form.opportunityNumber.value.trim();
+    setGateVisibility(els, true);
+    els.gateClientId.value = prev;
+    els.gateHint.textContent = prev
+      ? 'Puedes confirmar el mismo identificador o escribir otro. Pulsa Continuar.'
+      : 'Escribe el identificador del cliente.';
+    void els.gateClientId.focus();
+  });
 
   // Observaciones siempre debajo de Cliente (columna izquierda) para evitar huecos.
   if (els.obsBlock.parentElement !== els.leftStack) {
@@ -436,6 +780,7 @@ export async function mountApp(): Promise<void> {
   ];
 
   const onDraftChange = () => {
+    if (!isCurrentStageEditable(state)) return;
     state = persistDraft(els, state);
   };
 
@@ -452,6 +797,8 @@ export async function mountApp(): Promise<void> {
       void lookupOpportunityAndFill(els, state).then((s) => {
         state = s;
         state = persistDraft(els, state);
+        syncHistorySearchWithOpportunity(els, state);
+        fullRender(els, state);
       });
     }, 300);
   };
@@ -507,10 +854,13 @@ export async function mountApp(): Promise<void> {
     const id = btn?.getAttribute('data-activity-del');
     if (!id) return;
     if (!confirm('¿Borrar esta actividad?')) return;
-    void fetch(`/api/activities/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    Promise.resolve()
       .then(() => {
+        const num = els.form.opportunityNumber.value.trim();
+        const next = getActivitiesForOpp(num).filter((a) => a.id !== id);
+        setActivitiesForOpp(num, next);
         logEvent({
-          opportunityNumber: els.form.opportunityNumber.value.trim(),
+          opportunityNumber: num,
           eventType: 'activity_deleted',
           sellerName: els.form.sellerName.value.trim(),
           clientName: els.form.clientName.value.trim(),
@@ -536,26 +886,28 @@ export async function mountApp(): Promise<void> {
       scheduledAt: isoFromDatetimeLocal(els.activityDatetime.value),
       notes: els.activityNotes.value.trim(),
     };
-    void fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-      .then(() => {
-        logEvent({
-          opportunityNumber: num,
-          eventType: 'activity_created',
-          sellerName: els.form.sellerName.value.trim(),
-          clientName: els.form.clientName.value.trim(),
-          description: `Actividad creada: "${payload.title}" programada ${payload.scheduledAt}`,
-          metadata: { activityId: payload.id, title: payload.title, scheduledAt: payload.scheduledAt },
-        });
-        els.activityTitle.value = '';
-        els.activityDatetime.value = '';
-        els.activityNotes.value = '';
-        return refreshActivities(els);
-      })
-      .catch(() => void 0);
+    const row: ActivityDto = {
+      id: payload.id,
+      opportunity_number: num,
+      title: payload.title,
+      scheduled_at: payload.scheduledAt,
+      notes: payload.notes,
+      created_at: new Date().toISOString(),
+    };
+    const list = [...getActivitiesForOpp(num), row];
+    setActivitiesForOpp(num, list);
+    logEvent({
+      opportunityNumber: num,
+      eventType: 'activity_created',
+      sellerName: els.form.sellerName.value.trim(),
+      clientName: els.form.clientName.value.trim(),
+      description: `Actividad creada: "${payload.title}" programada ${payload.scheduledAt}`,
+      metadata: { activityId: payload.id, title: payload.title, scheduledAt: payload.scheduledAt },
+    });
+    els.activityTitle.value = '';
+    els.activityDatetime.value = '';
+    els.activityNotes.value = '';
+    void refreshActivities(els);
   });
 
   els.historyOpportunitySearch.addEventListener('input', () => scheduleHistoryPaint(els, state));
@@ -575,16 +927,49 @@ export async function mountApp(): Promise<void> {
     if (idx === null) return;
     const prevIdx = state.currentStageIndex;
     state = persistDraft(els, state);
-    state = { ...state, currentStageIndex: idx };
+    const opp = els.form.opportunityNumber.value.trim();
+    let nextState: AppState = { ...state, currentStageIndex: idx };
     const prevStage = STAGES[prevIdx];
     const newStage = STAGES[idx];
-    if (newStage && loadedStageDataCache[newStage.id]) {
-      state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[newStage.id] } };
+    const nextEditable = isCurrentStageEditable(nextState);
+
+    if (!nextEditable) {
+      const snap = latestSnapshotForStageIndex(nextState.history, opp, idx);
+      if (snap) {
+        nextState = { ...nextState, draft: cloneSnapshot(snap) };
+        writeOpportunityForm(els, snap);
+      } else if (newStage && loadedStageDataCache[newStage.id]) {
+        nextState = {
+          ...nextState,
+          draft: {
+            ...nextState.draft,
+            stageData: { ...loadedStageDataCache[newStage.id] },
+          },
+        };
+        writeOpportunityForm(els, nextState.draft);
+      } else {
+        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
+        writeOpportunityForm(els, nextState.draft);
+      }
     } else {
-      state = { ...state, draft: { ...state.draft, stageData: {} } };
+      const tipSnap = latestSnapshotForStageIndex(nextState.history, opp, idx);
+      if (tipSnap) {
+        nextState = { ...nextState, draft: cloneSnapshot(tipSnap) };
+        writeOpportunityForm(els, tipSnap);
+      } else if (newStage && loadedStageDataCache[newStage.id]) {
+        nextState = {
+          ...nextState,
+          draft: { ...nextState.draft, stageData: loadedStageDataCache[newStage.id] ?? {} },
+        };
+        writeOpportunityForm(els, nextState.draft);
+      } else {
+        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
+        writeOpportunityForm(els, nextState.draft);
+      }
     }
-    syncClosingPercentToStage(els, state.currentStageIndex);
-    saveStateLocal(state);
+
+    state = nextState;
+    saveState(state);
     if (idx !== prevIdx) {
       const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
       logEvent({
@@ -605,10 +990,8 @@ export async function mountApp(): Promise<void> {
 
   els.leadForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (!isCurrentStageEditable(state)) return;
     if (!els.leadForm.reportValidity()) return;
-
-    // % cierre automático en función de la etapa actual.
-    syncClosingPercentToStage(els, state.currentStageIndex);
 
     const stage = STAGES[state.currentStageIndex];
     if (!stage) return;
@@ -637,67 +1020,57 @@ export async function mountApp(): Promise<void> {
     const submittedStageIdx = STAGES.indexOf(stage);
     const advancedToNext = els.advanceNext.checked && state.currentStageIndex > submittedStageIdx;
 
-    saveState(state);
-    setSubmitStatus(els, 'Guardado');
+    void (async () => {
+      const synced = await saveStateSynced(state);
+      setSubmitStatus(els, synced ? 'Guardado' : 'Guardado solo en este equipo (revisa la API)');
 
-    // Log: envío de etapa
-    const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
-    logEvent({
-      opportunityNumber: snapshot.opportunityNumber.trim(),
-      eventType: 'stage_submit',
-      stageId: stage.id,
-      sellerName: snapshot.sellerName,
-      clientName: snapshot.clientName,
-      description: `Envió etapa "${stage.label}" — % cierre: ${snapshot.closingPercent}%`,
-      metadata: { closingPercent: snapshot.closingPercent, stageData: currentStageData },
-      durationSeconds: elapsed,
-    });
-
-    if (advancedToNext) {
-      const newStage = STAGES[state.currentStageIndex];
+      const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
       logEvent({
         opportunityNumber: snapshot.opportunityNumber.trim(),
-        eventType: 'stage_advance',
-        fromStage: stage.id,
-        toStage: newStage?.id ?? '',
+        eventType: 'stage_submit',
+        stageId: stage.id,
         sellerName: snapshot.sellerName,
         clientName: snapshot.clientName,
-        description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
+        description: `Envió etapa "${stage.label}" — % cierre: ${snapshot.closingPercent}%`,
+        metadata: { closingPercent: snapshot.closingPercent, stageData: currentStageData },
+        durationSeconds: elapsed,
       });
-      stageEnteredAt = Date.now();
-    }
 
-    if (snapshot.opportunityNumber.trim()) {
-      void fetch(apiUrl('/api/opportunity'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if (advancedToNext) {
+        const newStage = STAGES[state.currentStageIndex];
+        logEvent({
           opportunityNumber: snapshot.opportunityNumber.trim(),
-          clientName: snapshot.clientName,
-          clientEmail: snapshot.clientEmail,
-          clientPhone: snapshot.clientPhone,
+          eventType: 'stage_advance',
+          fromStage: stage.id,
+          toStage: newStage?.id ?? '',
           sellerName: snapshot.sellerName,
-        }),
-      }).catch(() => void 0);
+          clientName: snapshot.clientName,
+          description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
+        });
+        stageEnteredAt = Date.now();
+      }
 
-      void fetch(apiUrl('/api/stage-data'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          opportunityNumber: snapshot.opportunityNumber.trim(),
-          stageId: stage.id,
-          data: currentStageData,
-        }),
-      }).catch(() => void 0);
-    }
+      if (snapshot.opportunityNumber.trim()) {
+        void fetch(apiUrl('/api/opportunity'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opportunityNumber: snapshot.opportunityNumber.trim(),
+            clientName: snapshot.clientName,
+            clientEmail: snapshot.clientEmail,
+            clientPhone: snapshot.clientPhone,
+            sellerName: snapshot.sellerName,
+          }),
+        }).catch(() => void 0);
+      }
 
-    writeOpportunityForm(els.form, state.draft);
-    updateClosingPercentBar(els.form);
-    // Feedback visible + tabla inmediata (para verificar guardado).
-    if (snapshot.opportunityNumber.trim()) {
-      els.historyOpportunitySearch.value = snapshot.opportunityNumber.trim();
-    }
-    fullRender(els, state);
+      writeOpportunityForm(els.form, state.draft);
+      updateClosingPercentBar(els.form);
+      if (snapshot.opportunityNumber.trim()) {
+        syncHistorySearchWithOpportunity(els, state);
+      }
+      fullRender(els, state);
+    })();
   });
 
   els.btnExport.addEventListener('click', () => {
@@ -723,7 +1096,7 @@ export async function mountApp(): Promise<void> {
     writeOpportunityForm(els.form, emptySnapshot());
     ensureDefaultDates(els);
     updateClosingPercentBar(els.form);
-    saveStateLocal(state);
+    saveState(state);
     logEvent({
       opportunityNumber: prevOpp,
       eventType: 'form_reset',

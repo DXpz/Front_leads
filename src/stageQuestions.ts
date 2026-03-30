@@ -452,35 +452,38 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function renderField(f: StageField, value: string): string {
-  const req = f.required ? 'required' : '';
+function renderField(f: StageField, value: string, readOnly: boolean): string {
+  const req = readOnly ? '' : f.required ? 'required' : '';
+  const roAttr = readOnly ? 'readonly' : '';
+  const roSelect = readOnly ? 'disabled' : '';
   const star = f.required ? ' <span class="text-brand-red" title="Obligatorio">*</span>' : '';
   const id = `stage-q-${f.id}`;
+  const roClass = readOnly ? ' bg-ink-100/50 cursor-not-allowed' : '';
 
   let input: string;
   switch (f.type) {
     case 'select':
-      input = `<select id="${id}" class="input-industrial" ${req}>
+      input = `<select id="${id}" class="input-industrial${roClass}" ${roSelect} ${req}>
         ${(f.options ?? []).map((o) => `<option value="${escHtml(o.value)}" ${o.value === value ? 'selected' : ''}>${escHtml(o.label)}</option>`).join('')}
       </select>`;
       break;
     case 'textarea':
-      input = `<textarea id="${id}" rows="3" class="input-industrial resize-y min-h-[5rem]" placeholder="${escHtml(f.placeholder ?? '')}" ${req}>${escHtml(value)}</textarea>`;
+      input = `<textarea id="${id}" rows="3" class="input-industrial resize-y min-h-[5rem]${roClass}" placeholder="${escHtml(f.placeholder ?? '')}" ${roAttr} ${req}>${escHtml(value)}</textarea>`;
       break;
     case 'number':
-      input = `<input id="${id}" type="number" step="any" min="0" class="input-industrial" placeholder="${escHtml(f.placeholder ?? '')}" value="${escHtml(value)}" ${req} />`;
+      input = `<input id="${id}" type="number" step="any" min="0" class="input-industrial${roClass}" placeholder="${escHtml(f.placeholder ?? '')}" value="${escHtml(value)}" ${roAttr} ${req} />`;
       break;
     case 'date':
-      input = `<input id="${id}" type="date" class="input-industrial bg-brand-surface" value="${escHtml(value)}" ${req} />`;
+      input = `<input id="${id}" type="date" class="input-industrial bg-brand-surface${roClass}" value="${escHtml(value)}" ${roAttr} ${req} />`;
       break;
     case 'checkbox':
-      input = `<label class="flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-800">
-        <input id="${id}" type="checkbox" class="h-4 w-4 rounded-sm border-2 border-ink-400 accent-[#c8151b]" ${value === 'true' ? 'checked' : ''} />
+      input = `<label class="flex ${readOnly ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'} items-center gap-2 text-sm font-semibold text-ink-800">
+        <input id="${id}" type="checkbox" class="h-4 w-4 rounded-sm border-2 border-ink-400 accent-[#c8151b]" ${value === 'true' ? 'checked' : ''} ${readOnly ? 'disabled' : ''} />
         ${f.label}${star}
       </label>`;
       return `<div class="block">${input}</div>`;
     default:
-      input = `<input id="${id}" type="text" class="input-industrial" placeholder="${escHtml(f.placeholder ?? '')}" value="${escHtml(value)}" ${req} />`;
+      input = `<input id="${id}" type="text" class="input-industrial${roClass}" placeholder="${escHtml(f.placeholder ?? '')}" value="${escHtml(value)}" ${roAttr} ${req} />`;
   }
 
   return `<label class="block">
@@ -497,6 +500,7 @@ export function renderStageQuestions(
   container: HTMLElement,
   stageId: StageId,
   stageData: Record<string, string>,
+  readOnly = false,
 ): string[] {
   const fields = getFieldsForStage(stageId);
   if (fields.length === 0) {
@@ -504,7 +508,7 @@ export function renderStageQuestions(
     return [];
   }
 
-  container.innerHTML = fields.map((f) => renderField(f, stageData[f.id] ?? '')).join('');
+  container.innerHTML = fields.map((f) => renderField(f, stageData[f.id] ?? '', readOnly)).join('');
   return fields.map((f) => `stage-q-${f.id}`);
 }
 

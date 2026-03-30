@@ -82,7 +82,47 @@
     </div>
 
     <div class="layout-shell mx-auto w-full max-w-6xl min-w-0 px-3 py-6 sm:px-5 sm:py-8 md:px-6 lg:px-8 lg:py-10">
+      <section
+        id="client-id-gate"
+        class="panel mb-8 min-w-0 border-2 border-brand-navy/30 bg-white shadow-card sm:p-0"
+        aria-labelledby="client-id-gate-title"
+      >
+        <div class="ifon-band px-4 py-3 sm:px-7">
+          <h2 id="client-id-gate-title" class="text-base font-extrabold uppercase tracking-wide">
+            Paso 1 · Identifica la oportunidad
+          </h2>
+        </div>
+        <div class="space-y-4 p-5 sm:p-7">
+          <p class="text-sm font-medium leading-relaxed text-ink-800">
+            Escribe el <strong>identificador del cliente</strong> que te indica el sistema (es el mismo dato con el que trabajaremos en el registro).
+          </p>
+          <label class="block max-w-md">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">ID del cliente</span>
+            <input
+              type="text"
+              id="gate-client-id"
+              class="input-industrial"
+              placeholder="Ej. 12345 o el código que uses"
+              autocomplete="off"
+              enterkeyhint="go"
+            />
+          </label>
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              id="gate-continue"
+              class="min-h-[48px] rounded-sm border-2 border-black px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-card"
+              style="background-color: #145478; border-color: #000"
+            >
+              Continuar al formulario
+            </button>
+            <p id="gate-hint" class="text-xs font-semibold text-ink-500"></p>
+          </div>
+        </div>
+      </section>
+
       <header
+        id="app-page-header"
         class="mb-8 flex flex-col gap-4 border-b-2 border-ink-300 pb-6 sm:mb-10 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:pb-8"
       >
         <div class="min-w-0">
@@ -95,6 +135,13 @@
           </h1>
         </div>
         <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          <button
+            type="button"
+            id="btn-change-client-id"
+            class="hidden min-h-[44px] w-full rounded-sm border-2 border-white/40 bg-brand-navy px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-card transition hover:bg-white/10 sm:min-h-0 sm:w-auto"
+          >
+            Cambiar cliente
+          </button>
           <button
             type="button"
             id="btn-export"
@@ -112,6 +159,7 @@
         </div>
       </header>
 
+      <div id="app-workspace" class="hidden min-w-0">
       <section class="panel mb-8 min-w-0 sm:p-0">
         <div class="ifon-band px-5 py-3 sm:px-7">
           <h2 class="text-base font-extrabold uppercase tracking-wide">Ciclo de ventas</h2>
@@ -166,8 +214,16 @@
                 <input type="text" id="opportunity-name" required class="input-industrial" placeholder="Título del negocio" />
               </label>
               <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nº oportunidad</span>
-                <input type="text" id="opportunity-number" class="input-industrial" placeholder="Ej. 1" />
+                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700"
+                  >Nº oportunidad</span
+                >
+                <input
+                  type="text"
+                  id="opportunity-number"
+                  class="input-industrial"
+                  placeholder="El mismo que en el paso 1"
+                  title="Debe ser el mismo identificador que escribiste al identificar la oportunidad."
+                />
               </label>
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Estado</span>
@@ -239,7 +295,18 @@
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Nombre del vendedor</span>
-                <input type="text" id="seller-name" name="sellerName" required autocomplete="name" class="input-industrial" placeholder="Comercial asignado" />
+                <input
+                  type="text"
+                  id="seller-name"
+                  name="sellerName"
+                  required
+                  autocomplete="name"
+                  class="input-industrial"
+                  placeholder="Comercial asignado"
+                  list="seller-name-list"
+                  title="Sugerencias desde auditorías (GET /api/metrics/lista-asesores)"
+                />
+                <datalist id="seller-name-list"></datalist>
               </label>
                 </div>
               </details>
@@ -288,6 +355,7 @@
             <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="submit"
+                id="btn-submit-stage"
                 class="min-h-[48px] w-full rounded-sm border-2 border-black px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-white shadow-card transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:w-auto sm:px-8"
                 style="background-color: #c8151b; border-color: #000"
               >
@@ -307,14 +375,17 @@
         </div>
         <div class="flex flex-col gap-2 border-b-2 border-ink-200 bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 sm:px-7">
           <label class="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-            <span class="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-700">Buscar nº oportunidad</span>
+            <span class="shrink-0 text-xs font-bold uppercase tracking-wide text-ink-700"
+              >Buscar en historial</span
+            >
             <input
               type="search"
               id="history-opportunity-search"
               class="input-industrial min-w-0 flex-1 sm:max-w-xs"
-              placeholder="Ej. 1"
+              placeholder="Mismo ID del cliente / nº oportunidad"
               autocomplete="off"
               enterkeyhint="search"
+              title="Se actualiza al abrir una oportunidad; aquí puedes filtrar si lo necesitas."
             />
           </label>
           <button
@@ -364,6 +435,7 @@
         <span class="mx-1.5 text-ink-400" aria-hidden="true">·</span>
         <span>Uso corporativo · Equipo comercial</span>
       </footer>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
 

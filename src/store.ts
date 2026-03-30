@@ -51,6 +51,12 @@ async function putStateToServer(state: AppState): Promise<boolean> {
   }
 }
 
+/** Igual que `saveState` pero espera el PUT para que GET /api/history vea datos ya persistidos. */
+export async function saveStateSynced(state: AppState): Promise<boolean> {
+  saveStateLocal(state);
+  return putStateToServer(state);
+}
+
 function isMeaningfulState(s: AppState): boolean {
   if (s.history.length > 0) return true;
   if (s.currentStageIndex !== 0) return true;

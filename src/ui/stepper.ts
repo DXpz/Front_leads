@@ -3,29 +3,38 @@ import { STAGES } from '../stages';
 const STEP_INDEX_ATTR = 'data-stage-index';
 
 /**
- * @param previousIndex índice de etapa antes del último cambio; null en la primera pintura (sin animación de llenado).
+ * @param selectedIndex Etapa que el usuario está viendo (clic en el paso).
+ * @param progressIndex Hasta qué paso llegó el embudo (p. ej. `opportunity_stage - 1` desde la API): líneas y ✓.
+ * @param previousSelected Índice seleccionado anterior (animación).
+ * @param previousProgress Índice de progreso CRM anterior (animación de líneas al actualizar desde API).
  */
 export function renderStepper(
   container: HTMLElement,
-  currentIndex: number,
-  previousIndex: number | null,
+  selectedIndex: number,
+  progressIndex: number,
+  previousSelected: number | null,
+  previousProgress: number | null,
 ): void {
+  const prog = Math.max(0, Math.min(STAGES.length - 1, progressIndex));
+  const sel = Math.max(0, Math.min(STAGES.length - 1, selectedIndex));
+
   const segments = STAGES.map((s, i) => {
-    const done = i < currentIndex;
-    const active = i === currentIndex;
+    const done = i <= prog;
+    const active = i === sel;
+    const reviewPast = active && i < prog;
 
     const boxBase =
       'stepper-box flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border-2 border-black text-xs font-extrabold sm:h-11 sm:w-11 sm:text-sm';
     const boxState = active
-      ? `${boxBase} stepper-box--fill stepper-box--emphasize`
+      ? `${boxBase} stepper-box--fill ${reviewPast ? 'ring-2 ring-[#c8151b] ring-offset-1' : 'stepper-box--emphasize'}`
       : done
         ? `${boxBase} stepper-box--fill`
         : `${boxBase} stepper-box--empty`;
 
-    const isLineDone = i < currentIndex;
-    /** Línea entre etapa i e i+1: recién completada al avanzar (para animar llenado). */
+    const isLineDone = i < prog;
+    /** Línea entre etapa i e i+1: animar cuando el progreso CRM avanza. */
     const lineJustFilled =
-      previousIndex !== null && isLineDone && i >= previousIndex && i < currentIndex;
+      previousProgress !== null && isLineDone && i >= previousProgress && i < prog;
     const fillClass = !isLineDone
       ? 'stepper-line-fill stepper-line-fill--empty'
       : lineJustFilled
@@ -39,7 +48,7 @@ export function renderStepper(
 
     const labelClass = `stepper-label min-h-[2.5rem] w-full text-center text-[9px] font-bold uppercase leading-tight tracking-tight sm:min-h-[2.75rem] sm:text-[10px] ${
       active ? 'stepper-label--active text-[#c8151b]' : 'text-[#404040]'
-    }`;
+    }${reviewPast ? ' italic' : ''}`;
 
     return `
       <div class="flex shrink-0 items-start">

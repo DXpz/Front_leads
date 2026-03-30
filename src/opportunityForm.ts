@@ -80,6 +80,10 @@ export function readOpportunityForm(
       : els.displaySystemCurrency.value === 'true',
     opportunityName: els.opportunityName.value.trim(),
     opportunityNumber: els.opportunityNumber.value.trim(),
+    clientId: (() => {
+      const n = els.opportunityNumber.value.trim();
+      return n || undefined;
+    })(),
     documentStatus: els.documentStatus.value,
     opportunityStartDate: els.opportunityStartDate.value,
     opportunityClosingDate: els.opportunityClosingDate.value,
@@ -110,6 +114,9 @@ export function writeOpportunityForm(els: OpportunityFormElements, d: Partial<Op
   }
   if (d.opportunityName !== undefined) els.opportunityName.value = d.opportunityName;
   if (d.opportunityNumber !== undefined) els.opportunityNumber.value = d.opportunityNumber;
+  if (d.clientId !== undefined && !els.opportunityNumber.value.trim() && d.clientId.trim()) {
+    els.opportunityNumber.value = d.clientId.trim();
+  }
   if (d.documentStatus !== undefined) els.documentStatus.value = d.documentStatus;
   if (d.opportunityStartDate !== undefined) els.opportunityStartDate.value = d.opportunityStartDate;
   if (d.opportunityClosingDate !== undefined) els.opportunityClosingDate.value = d.opportunityClosingDate;
@@ -127,6 +134,46 @@ export function updateClosingPercentBar(els: OpportunityFormElements): void {
   const pct = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
   els.closingPercentBar.style.width = `${pct}%`;
   els.closingPercentLabel.textContent = Number.isFinite(n) ? `${Math.round(n)}%` : '—';
+}
+
+const roCls = 'bg-ink-100/40';
+
+/** Modo revisión: bloquea el formulario principal (la API manda el % de avance vía embudo). */
+export function setLeadFormFieldsReadonly(els: OpportunityFormElements, readOnly: boolean): void {
+  const textLike: HTMLElement[] = [
+    els.clientName,
+    els.clientEmail,
+    els.clientPhone,
+    els.sellerName,
+    els.totalInvoiceAmount,
+    els.territory,
+    els.opportunityName,
+    els.opportunityNumber,
+    els.opportunityStartDate,
+    els.opportunityClosingDate,
+    els.openActivitiesCount,
+    els.closingPercent,
+    els.potentialAmount,
+    els.relatedDocClass,
+    els.relatedDocNumber,
+    els.notes,
+  ];
+  for (const el of textLike) {
+    if (el instanceof HTMLSelectElement) {
+      el.disabled = readOnly;
+    } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      el.readOnly = readOnly;
+      el.classList.toggle(roCls, readOnly);
+    }
+  }
+  els.documentStatus.disabled = readOnly;
+  if (els.displaySystemCurrency.type === 'checkbox') {
+    (els.displaySystemCurrency as HTMLInputElement).disabled = readOnly;
+    els.displaySystemCurrency.classList.toggle(roCls, readOnly);
+  } else {
+    (els.displaySystemCurrency as HTMLInputElement).readOnly = readOnly;
+    els.displaySystemCurrency.classList.toggle(roCls, readOnly);
+  }
 }
 
 export function bindClosingPercentBar(els: OpportunityFormElements): void {
