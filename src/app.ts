@@ -154,6 +154,7 @@ type Elements = {
   stageQuestionsTitle: HTMLElement;
   stageQuestionsContainer: HTMLElement;
   btnSubmitStage: HTMLButtonElement;
+  btnCloseOpportunity: HTMLButtonElement;
   clientGate: HTMLElement;
   appWorkspace: HTMLElement;
   gateClientId: HTMLInputElement;
@@ -205,6 +206,7 @@ function queryElements(): Elements {
     stageQuestionsTitle: q('stage-questions-title'),
     stageQuestionsContainer: q('stage-questions-container'),
     btnSubmitStage: q<HTMLButtonElement>('btn-submit-stage'),
+    btnCloseOpportunity: q<HTMLButtonElement>('btn-close-opportunity'),
     clientGate: q('client-id-gate'),
     appWorkspace: q('app-workspace'),
     gateClientId: q<HTMLInputElement>('gate-client-id'),
@@ -708,6 +710,7 @@ function applyStageViewLock(els: Elements, state: AppState): void {
   setLeadFormFieldsReadonly(els.form, ro);
   els.advanceNext.disabled = ro;
   els.btnSubmitStage.disabled = ro;
+  els.btnCloseOpportunity.disabled = ro;
   els.btnReset.disabled = ro;
   els.btnOpenActivities.disabled = ro;
   els.stageQuestionsPanel.classList.toggle('opacity-95', ro);
@@ -1110,6 +1113,77 @@ export async function mountApp(): Promise<void> {
       if (snapshot.opportunityNumber.trim()) {
         syncHistorySearchWithOpportunity(els, state);
       }
+      fullRender(els, state);
+    })();
+  });
+
+  els.btnCloseOpportunity.addEventListener('click', () => {
+    if (!isCurrentStageEditable(state)) return;
+    const notes = els.form.notes.value.trim();
+    if (!notes) {
+      setSubmitStatus(els, 'Para cerrar, agrega feedback en Observaciones.');
+      els.form.notes.focus();
+      return;
+    }
+    const opp = els.form.opportunityNumber.value.trim();
+    if (!opp) {
+      setSubmitStatus(els, 'Falta el ID de oportunidad.');
+      els.form.opportunityNumber.focus();
+      return;
+    }
+    if (!confirm('¿Deseas cerrar esta oportunidad ahora?')) return;
+
+    const closureStage = STAGES[STAGE_COUNT - 1];
+    if (!closureStage) return;
+    const closureStageData = readStageQuestionValues(closureStage.id);
+    loadedStageDataCache[closureStage.id] = closureStageData;
+
+    els.form.documentStatus.value = 'cerrado_perdido';
+    els.form.opportunityClosingDate.value = todayIsoDate();
+    els.form.closingPercent.value = '0';
+    updateClosingPercentBar(els.form);
+
+    const snapshot = cloneSnapshot(readOpportunityForm(els.form, closureStageData));
+    const entry: StageEntry = {
+      id: crypto.randomUUID(),
+      stageId: closureStage.id,
+      createdAt: new Date().toISOString(),
+      snapshot,
+    };
+
+    state = {
+      ...state,
+      currentStageIndex: STAGE_COUNT - 1,
+      draft: snapshot,
+      history: [...state.history, entry],
+    };
+
+    void (async () => {
+      const synced = await saveStateSynced(state);
+      setSubmitStatus(els, synced ? 'Oportunidad cerrada' : 'Cerrada en local; API no disponible');
+      if (snapshot.opportunityNumber.trim()) {
+        void apiFetch('/api/opportunity', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opportunityNumber: snapshot.opportunityNumber.trim(),
+            clientName: snapshot.clientName,
+            clientEmail: snapshot.clientEmail,
+            clientPhone: snapshot.clientPhone,
+            sellerName: snapshot.sellerName,
+          }),
+        }).catch(() => void 0);
+      }
+      logEvent({
+        opportunityNumber: snapshot.opportunityNumber.trim(),
+        eventType: 'opportunity_closed',
+        stageId: closureStage.id,
+        sellerName: snapshot.sellerName,
+        clientName: snapshot.clientName,
+        description: 'Cierre manual de oportunidad con feedback del asesor',
+      });
+      stageEnteredAt = Date.now();
+      syncHistorySearchWithOpportunity(els, state);
       fullRender(els, state);
     })();
   });
