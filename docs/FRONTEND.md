@@ -30,6 +30,37 @@ No hay framework de UI: **TypeScript** puro, **Vite** como bundler y **Tailwind*
 - En desarrollo, las rutas `/api/*` se **proxifican** a la API (ver `vite.config.ts`). No hace falta CORS para el navegador en ese caso.
 - Si despliegas el front **sin** proxy, puedes definir `VITE_API_BASE_URL` apuntando al servidor de la API (ver comentarios en `src/api.ts`).
 
+### 2.1 Configuración actual (ngrok)
+
+Base activa para API:
+
+- `https://focal-unpointed-hortencia.ngrok-free.dev`
+
+Archivos de referencia en este repo:
+
+- `.env` (uso local).
+- `.env.example` (plantilla compartible).
+
+Ejemplo:
+
+```env
+VITE_API_BASE_URL=https://focal-unpointed-hortencia.ngrok-free.dev
+```
+
+### 2.2 Despliegue en Vercel con ngrok
+
+1. En Vercel, abrir el proyecto del frontend.
+2. Ir a **Settings → Environment Variables**.
+3. Crear `VITE_API_BASE_URL` con la URL pública de ngrok.
+4. Aplicar la variable en `Production` (y opcionalmente `Preview`/`Development`).
+5. Hacer **Redeploy** para que el build tome el nuevo valor.
+
+Importante: en plan free de ngrok, la URL cambia al reiniciar el túnel. Cada vez que cambie:
+
+- actualizar `VITE_API_BASE_URL` en Vercel,
+- redeploy,
+- y actualizar cualquier webhook/cliente externo que apunte a la API.
+
 ---
 
 ## 3. Estructura de archivos (lo esencial)
