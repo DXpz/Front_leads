@@ -33,6 +33,18 @@ export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   if (!headers.has('ngrok-skip-browser-warning')) {
     headers.set('ngrok-skip-browser-warning', 'true');
   }
-  return fetch(withNgrokBypass(apiUrl(path)), { ...init, headers });
+  
+  const url = withNgrokBypass(apiUrl(path));
+  console.debug(`API Call: ${init?.method || 'GET'} ${url}`);
+  
+  return fetch(url, { ...init, headers })
+    .then(response => {
+      console.debug(`API Response: ${response.status} ${response.statusText} for ${init?.method || 'GET'} ${url}`);
+      return response;
+    })
+    .catch(error => {
+      console.error(`API Error: ${error.message} for ${init?.method || 'GET'} ${url}`);
+      throw error;
+    });
 }
 
