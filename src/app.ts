@@ -161,6 +161,8 @@ type Elements = {
   gateHint: HTMLElement;
   btnChangeClientId: HTMLButtonElement;
   pageHeader: HTMLElement;
+  loadingOverlay: HTMLElement;
+  loadingText: HTMLElement;
 };
 
 function queryElements(): Elements {
@@ -210,6 +212,8 @@ function queryElements(): Elements {
     gateHint: q('gate-hint'),
     btnChangeClientId: q<HTMLButtonElement>('btn-change-client-id'),
     pageHeader: q('app-page-header'),
+    loadingOverlay: q('app-loading'),
+    loadingText: q('app-loading-text'),
   };
 }
 
@@ -227,6 +231,20 @@ function setGateVisibility(els: Elements, gateActive: boolean): void {
   els.appWorkspace.classList.toggle('hidden', gateActive);
   els.pageHeader.classList.toggle('hidden', gateActive);
   els.btnChangeClientId.classList.toggle('hidden', gateActive);
+}
+
+let loadingDepth = 0;
+function showLoading(els: Elements, msg: string): void {
+  loadingDepth += 1;
+  els.loadingText.textContent = msg;
+  els.loadingOverlay.classList.remove('hidden');
+}
+
+function hideLoading(els: Elements): void {
+  loadingDepth = Math.max(0, loadingDepth - 1);
+  if (loadingDepth === 0) {
+    els.loadingOverlay.classList.add('hidden');
+  }
 }
 
 /** Historial: mismo criterio que el número de oportunidad / client_id. */
@@ -250,17 +268,31 @@ async function applyClientIdAndOpenWorkspace(
   els.gateHint.textContent = '';
   sessionStorage.setItem(SESSION_CLIENT_KEY, id);
   els.gateClientId.value = id;
-  mergeLoadedCacheFromStateHistory(state, id);
-  writeOpportunityForm(els.form, state.draft);
+  crmOpportunityStageIndexFromApi = -1;
+  loadedStageDataCache = {};
+  // Al cambiar de cliente, reiniciamos el formulario para evitar arrastre de datos.
+  const freshDraft: Partial<OpportunityForm> = {
+    ...emptySnapshot(),
+    opportunityNumber: id,
+    clientId: id,
+  };
+  let s: AppState = { ...state, currentStageIndex: 0, draft: freshDraft };
+  mergeLoadedCacheFromStateHistory(s, id);
+  writeOpportunityForm(els.form, freshDraft);
   els.form.opportunityNumber.value = id;
   ensureDefaultDates(els);
   setGateVisibility(els, false);
   opportunityLookupLastKey = '';
-  let s = await lookupOpportunityAndFill(els, state);
-  s = persistDraft(els, s);
-  fullRender(els, s);
-  syncHistorySearchWithOpportunity(els, s);
-  return s;
+  showLoading(els, 'Cargando cliente...');
+  try {
+    s = await lookupOpportunityAndFill(els, s);
+    s = persistDraft(els, s);
+    fullRender(els, s);
+    syncHistorySearchWithOpportunity(els, s);
+    return s;
+  } finally {
+    hideLoading(els);
+  }
 }
 
 /** Guarda el borrador solo en localStorage (sin llamar a la API). */
@@ -724,7 +756,13 @@ function ensureDefaultDates(els: Elements): void {
 
 export async function mountApp(): Promise<void> {
   const els = queryElements();
-  let state: AppState = await loadState();
+  showLoading(els, 'Cargando aplicacion...');
+  let state: AppState;
+  try {
+    state = await loadState();
+  } finally {
+    hideLoading(els);
+  }
 
   void refreshSellerNameDatalist();
 
@@ -794,12 +832,15 @@ export async function mountApp(): Promise<void> {
     if (opportunityLookupTimer) clearTimeout(opportunityLookupTimer);
     opportunityLookupTimer = setTimeout(() => {
       opportunityLookupTimer = null;
-      void lookupOpportunityAndFill(els, state).then((s) => {
-        state = s;
-        state = persistDraft(els, state);
-        syncHistorySearchWithOpportunity(els, state);
-        fullRender(els, state);
-      });
+      showLoading(els, 'Actualizando cliente...');
+      void lookupOpportunityAndFill(els, state)
+        .then((s) => {
+          state = s;
+          state = persistDraft(els, state);
+          syncHistorySearchWithOpportunity(els, state);
+          fullRender(els, state);
+        })
+        .finally(() => hideLoading(els));
     }, 300);
   };
   els.form.opportunityNumber.addEventListener('blur', doOpportunityLookup);

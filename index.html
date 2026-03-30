@@ -61,6 +61,22 @@
     </style>
   </head>
   <body class="min-w-0 font-sans text-ink-900 antialiased">
+    <div
+      id="app-loading"
+      class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="w-full max-w-sm rounded-sm border-2 border-black bg-white p-6 shadow-card">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-6 w-6 animate-spin rounded-full border-[3px] border-ink-300 border-t-brand-red"></span>
+          <p id="app-loading-text" class="text-sm font-bold uppercase tracking-wide text-ink-800">
+            Cargando informacion...
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div class="ifon-masthead border-b-4 border-brand-red bg-brand-black text-white">
       <div
         class="mx-auto flex max-w-6xl flex-col items-stretch justify-between gap-3 py-3 sm:flex-row sm:items-center sm:gap-2"
