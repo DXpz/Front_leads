@@ -52,6 +52,12 @@ function syncClosingPercentToStage(els: Elements, stageIndex: number): void {
 /** Índice de etapa CRM 0..5 desde GET /api/audit (-1 = sin dato). */
 let crmOpportunityStageIndexFromApi = -1;
 
+/**
+ * Mapa de feedback por etapa desde `audit.stage_feedback_json`.
+ * Clave = número de etapa API (1..6, donde 2 = REUNIÓN).
+ */
+let auditStageFeedbackJsonByStageNumber: Record<number, string> = {};
+
 /** Progreso mostrado en stepper / barra: prioriza `opportunity_stage` de la API. */
 let stepperPreviousProgressIndex: number | null = null;
 
@@ -164,6 +170,12 @@ type Elements = {
   pageHeader: HTMLElement;
   loadingOverlay: HTMLElement;
   loadingText: HTMLElement;
+  closeOpportunityModal: HTMLElement;
+  closeOpportunityJustification: HTMLTextAreaElement;
+  closeOpportunityHint: HTMLElement;
+  btnCloseOpportunityDismiss: HTMLButtonElement;
+  btnCloseOpportunityCancel: HTMLButtonElement;
+  btnCloseOpportunityConfirm: HTMLButtonElement;
 };
 
 function queryElements(): Elements {
@@ -216,6 +228,12 @@ function queryElements(): Elements {
     pageHeader: q('app-page-header'),
     loadingOverlay: q('app-loading'),
     loadingText: q('app-loading-text'),
+    closeOpportunityModal: q('close-opportunity-modal'),
+    closeOpportunityJustification: q<HTMLTextAreaElement>('close-opportunity-justification'),
+    closeOpportunityHint: q('close-opportunity-hint'),
+    btnCloseOpportunityDismiss: q<HTMLButtonElement>('btn-close-opportunity-dismiss'),
+    btnCloseOpportunityCancel: q<HTMLButtonElement>('btn-close-opportunity-cancel'),
+    btnCloseOpportunityConfirm: q<HTMLButtonElement>('btn-close-opportunity-confirm'),
   };
 }
 
@@ -249,6 +267,26 @@ function hideLoading(els: Elements): void {
   }
 }
 
+function mergeCloseJustificationIntoNotes(existingNotes: string, justification: string): string {
+  const j = justification.trim();
+  const e = existingNotes.trim();
+  const block = `[Motivo de cierre]\n${j}`;
+  return e ? `${e}\n\n${block}` : block;
+}
+
+function showCloseOpportunityModal(els: Elements): void {
+  els.closeOpportunityHint.textContent = '';
+  els.closeOpportunityJustification.value = '';
+  els.closeOpportunityModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => els.closeOpportunityJustification.focus());
+}
+
+function hideCloseOpportunityModal(els: Elements): void {
+  els.closeOpportunityModal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
 /** Historial: mismo criterio que el número de oportunidad / client_id. */
 function syncHistorySearchWithOpportunity(els: Elements, state: AppState): void {
   const n = els.form.opportunityNumber.value.trim();
@@ -272,6 +310,7 @@ async function applyClientIdAndOpenWorkspace(
   els.gateClientId.value = id;
   crmOpportunityStageIndexFromApi = -1;
   loadedStageDataCache = {};
+  auditStageFeedbackJsonByStageNumber = {};
   // Al cambiar de cliente, reiniciamos el formulario para evitar arrastre de datos.
   const freshDraft: Partial<OpportunityForm> = {
     ...emptySnapshot(),
@@ -381,6 +420,21 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
       stn = Math.max(1, Math.min(6, stn));
       crmOpportunityStageIndexFromApi = stn - 1;
     }
+
+    // stage_feedback_json: feedback por etapa (1..6). 2 = REUNIÓN (bloquea escalación vía advisor_feedback).
+    auditStageFeedbackJsonByStageNumber = {};
+    {
+      const sfj = (a as { stage_feedback_json?: unknown }).stage_feedback_json;
+      if (sfj && typeof sfj === 'object' && !Array.isArray(sfj)) {
+        const obj = sfj as Record<string, unknown>;
+        for (const [k, v] of Object.entries(obj)) {
+          const stageNum = parseInt(k, 10);
+          if (!Number.isFinite(stageNum) || stageNum < 1 || stageNum > 6) continue;
+          const txt = typeof v === 'string' ? v.trim() : String(v ?? '').trim();
+          if (txt) auditStageFeedbackJsonByStageNumber[stageNum] = txt;
+        }
+      }
+    }
     fillIfEmpty(els.form.clientName, String(a.client_name ?? ''));
     fillIfEmpty(els.form.clientEmail, String(a.client_email ?? ''));
     fillIfEmpty(els.form.clientPhone, String(a.client_phone ?? ''));
@@ -483,12 +537,33 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
     } else {
       const st = STAGES[tIdx];
       const sd = st ? loadedStageDataCache[st.id] ?? {} : {};
-      state = { ...state, draft: { ...state.draft, stageData: { ...sd } } };
+      const stageNum = tIdx + 1; // API 1..6 (2 = REUNIÓN)
+      const fb = auditStageFeedbackJsonByStageNumber[stageNum] ?? '';
+      const existingNotes = els.form.notes.value.trim();
+      const nextNotes = fb || existingNotes || '';
+      const nextDraft: Partial<OpportunityForm> = {
+        ...state.draft,
+        stageData: { ...sd },
+        notes: nextNotes,
+      };
+      state = { ...state, draft: nextDraft };
+      writeOpportunityForm(els, nextDraft);
     }
   } else {
     const cur = STAGES[state.currentStageIndex];
     if (cur && loadedStageDataCache[cur.id]) {
-      state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[cur.id] ?? {} } };
+      const sd = loadedStageDataCache[cur.id] ?? {};
+      const stageNum = state.currentStageIndex + 1; // API 1..6
+      const fb = auditStageFeedbackJsonByStageNumber[stageNum] ?? '';
+      const existingNotes = els.form.notes.value.trim();
+      const nextNotes = fb || existingNotes || '';
+      const nextDraft: Partial<OpportunityForm> = {
+        ...state.draft,
+        stageData: { ...sd },
+        notes: nextNotes,
+      };
+      state = { ...state, draft: nextDraft };
+      writeOpportunityForm(els, nextDraft);
     }
   }
 
@@ -976,6 +1051,8 @@ export async function mountApp(): Promise<void> {
     const prevStage = STAGES[prevIdx];
     const newStage = STAGES[idx];
     const nextEditable = isCurrentStageEditable(nextState);
+    const stageNum = idx + 1; // API 1..6 (2 = REUNIÓN)
+    const fb = auditStageFeedbackJsonByStageNumber[stageNum] ?? '';
 
     if (!nextEditable) {
       const snap = latestSnapshotForStageIndex(nextState.history, opp, idx);
@@ -988,11 +1065,12 @@ export async function mountApp(): Promise<void> {
           draft: {
             ...nextState.draft,
             stageData: { ...loadedStageDataCache[newStage.id] },
+            notes: fb,
           },
         };
         writeOpportunityForm(els, nextState.draft);
       } else {
-        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
+        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {}, notes: fb } };
         writeOpportunityForm(els, nextState.draft);
       }
     } else {
@@ -1003,11 +1081,15 @@ export async function mountApp(): Promise<void> {
       } else if (newStage && loadedStageDataCache[newStage.id]) {
         nextState = {
           ...nextState,
-          draft: { ...nextState.draft, stageData: loadedStageDataCache[newStage.id] ?? {} },
+          draft: {
+            ...nextState.draft,
+            stageData: loadedStageDataCache[newStage.id] ?? {},
+            notes: fb,
+          },
         };
         writeOpportunityForm(els, nextState.draft);
       } else {
-        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
+        nextState = { ...nextState, draft: { ...nextState.draft, stageData: {}, notes: fb } };
         writeOpportunityForm(els, nextState.draft);
       }
     }
@@ -1094,6 +1176,25 @@ export async function mountApp(): Promise<void> {
         stageEnteredAt = Date.now();
       }
 
+      // Retroalimentación al auditor: ahora el backend guarda por etapa en `stage_feedback_json`,
+      // y solo la etapa 2 usa el campo viejo `advisor_feedback` para frenar la escalación.
+      // Enviamos siempre `stage` (API 1..6).
+      {
+        const submittedStageNum = submittedStageIdx + 1; // API 1..6
+        const clientId = (snapshot.clientId ?? snapshot.opportunityNumber).trim();
+        const retroText = (snapshot.notes ?? '').trim();
+        if (clientId && retroText) {
+          void apiFetch(`/api/audit/client/${encodeURIComponent(clientId)}/retroalimentacion`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              retroalimentacion: retroText,
+              stage: submittedStageNum,
+            }),
+          }).catch(() => void 0);
+        }
+      }
+
       if (snapshot.opportunityNumber.trim()) {
         void apiFetch('/api/opportunity', {
           method: 'PUT',
@@ -1119,19 +1220,51 @@ export async function mountApp(): Promise<void> {
 
   els.btnCloseOpportunity.addEventListener('click', () => {
     if (!isCurrentStageEditable(state)) return;
-    const notes = els.form.notes.value.trim();
-    if (!notes) {
-      setSubmitStatus(els, 'Para cerrar, agrega feedback en Observaciones.');
-      els.form.notes.focus();
-      return;
-    }
     const opp = els.form.opportunityNumber.value.trim();
     if (!opp) {
       setSubmitStatus(els, 'Falta el ID de oportunidad.');
       els.form.opportunityNumber.focus();
       return;
     }
-    if (!confirm('¿Deseas cerrar esta oportunidad ahora?')) return;
+    showCloseOpportunityModal(els);
+  });
+
+  const dismissCloseOpportunityModal = () => hideCloseOpportunityModal(els);
+
+  els.btnCloseOpportunityDismiss.addEventListener('click', dismissCloseOpportunityModal);
+  els.btnCloseOpportunityCancel.addEventListener('click', dismissCloseOpportunityModal);
+  els.closeOpportunityModal.addEventListener('click', (e) => {
+    if (e.target === els.closeOpportunityModal) dismissCloseOpportunityModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!els.closeOpportunityModal.classList.contains('hidden')) {
+      e.preventDefault();
+      dismissCloseOpportunityModal();
+    }
+  });
+
+  els.btnCloseOpportunityConfirm.addEventListener('click', () => {
+    const justification = els.closeOpportunityJustification.value.trim();
+    if (!justification) {
+      els.closeOpportunityHint.textContent = 'Escribe la justificación del cierre.';
+      els.closeOpportunityJustification.focus();
+      return;
+    }
+    els.closeOpportunityHint.textContent = '';
+    if (!isCurrentStageEditable(state)) {
+      hideCloseOpportunityModal(els);
+      return;
+    }
+    const opp = els.form.opportunityNumber.value.trim();
+    if (!opp) {
+      hideCloseOpportunityModal(els);
+      setSubmitStatus(els, 'Falta el ID de oportunidad.');
+      return;
+    }
+
+    els.form.notes.value = mergeCloseJustificationIntoNotes(els.form.notes.value, justification);
+    hideCloseOpportunityModal(els);
 
     const closureStage = STAGES[STAGE_COUNT - 1];
     if (!closureStage) return;
@@ -1161,6 +1294,24 @@ export async function mountApp(): Promise<void> {
     void (async () => {
       const synced = await saveStateSynced(state);
       setSubmitStatus(els, synced ? 'Oportunidad cerrada' : 'Cerrada en local; API no disponible');
+
+      // Retroalimentación de cierre: backend guarda por etapa en `stage_feedback_json`.
+      {
+        const stageNum = STAGE_COUNT; // API 1..6
+        const clientId = (snapshot.clientId ?? snapshot.opportunityNumber).trim();
+        const retroText = (snapshot.notes ?? '').trim();
+        if (clientId && retroText) {
+          void apiFetch(`/api/audit/client/${encodeURIComponent(clientId)}/retroalimentacion`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              retroalimentacion: retroText,
+              stage: stageNum,
+            }),
+          }).catch(() => void 0);
+        }
+      }
+
       if (snapshot.opportunityNumber.trim()) {
         void apiFetch('/api/opportunity', {
           method: 'PUT',
@@ -1180,7 +1331,7 @@ export async function mountApp(): Promise<void> {
         stageId: closureStage.id,
         sellerName: snapshot.sellerName,
         clientName: snapshot.clientName,
-        description: 'Cierre manual de oportunidad con feedback del asesor',
+        description: `Cierre manual: ${justification.slice(0, 120)}`,
       });
       stageEnteredAt = Date.now();
       syncHistorySearchWithOpportunity(els, state);

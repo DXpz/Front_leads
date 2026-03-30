@@ -513,5 +513,61 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal: cierre de oportunidad -->
+    <div
+      id="close-opportunity-modal"
+      class="modal-backdrop z-[100] hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="close-opportunity-title"
+    >
+      <div class="modal-card max-w-lg" role="document">
+        <div class="modal-head">
+          <div class="min-w-0">
+            <p class="text-[10px] font-extrabold uppercase tracking-widest text-white/80">Confirmación</p>
+            <h2 id="close-opportunity-title" class="text-lg font-extrabold uppercase tracking-tight text-white">
+              Cerrar oportunidad
+            </h2>
+            <p class="mt-1 text-[11px] font-semibold text-white/90">
+              Esta acción marca la oportunidad como cerrada. Indica el motivo para dejarlo registrado.
+            </p>
+          </div>
+          <button type="button" id="btn-close-opportunity-dismiss" class="modal-x" aria-label="Cerrar">×</button>
+        </div>
+        <div class="modal-body space-y-4">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">
+              Justificación del cierre <span class="text-brand-red">*</span>
+            </span>
+            <textarea
+              id="close-opportunity-justification"
+              class="input-industrial min-h-[6rem] resize-y"
+              rows="4"
+              placeholder="Ej. Cliente no contesta llamadas ni correos desde hace 2 semanas."
+              autocomplete="off"
+            ></textarea>
+          </label>
+          <p id="close-opportunity-hint" class="text-xs font-semibold text-brand-red" role="alert"></p>
+          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <button
+              type="button"
+              id="btn-close-opportunity-cancel"
+              class="min-h-[44px] w-full rounded-sm border-2 border-brand-black bg-white px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-900 shadow-card hover:bg-brand-surface sm:w-auto"
+            >
+              Volver
+            </button>
+            <button
+              type="button"
+              id="btn-close-opportunity-confirm"
+              class="min-h-[44px] w-full rounded-sm border-2 border-black px-5 py-2.5 text-xs font-extrabold uppercase tracking-widest text-white shadow-card sm:w-auto"
+              style="background-color: #1a1a1a; border-color: #000"
+            >
+              Confirmar cierre
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
