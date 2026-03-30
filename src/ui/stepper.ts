@@ -15,6 +15,12 @@ export function renderStepper(
   previousSelected: number | null,
   previousProgress: number | null,
 ): void {
+  // Validar que el contenedor existe
+  if (!container) {
+    console.error('Stepper container not found');
+    return;
+  }
+
   const prog = Math.max(0, Math.min(STAGES.length - 1, progressIndex));
   const sel = Math.max(0, Math.min(STAGES.length - 1, selectedIndex));
 
