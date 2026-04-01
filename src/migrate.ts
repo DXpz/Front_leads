@@ -1,10 +1,37 @@
+import { STAGE_COUNT } from './stages';
 import type {
   AppState,
   LegacyGeneralLead,
   LegacyStageEntry,
   OpportunityForm,
   StageEntry,
+  StageId,
 } from './types';
+
+/** Fusiona etapas antiguas `construccion` y `envio` en `v.propuesta`. */
+export function mapLegacyStageIdToCurrent(id: string): StageId {
+  if (id === 'construccion' || id === 'envio') return 'propuesta';
+  if (
+    id === 'asignacion' ||
+    id === 'reunion' ||
+    id === 'propuesta' ||
+    id === 'seguimiento' ||
+    id === 'cierre'
+  ) {
+    return id;
+  }
+  return 'asignacion';
+}
+
+/** De índice UI con 6 etapas (antes de fusionar) al índice actual (5 etapas). */
+export function mapLegacyCurrentStageIndex(idx: number): number {
+  const maxIdx = Math.max(0, STAGE_COUNT - 1);
+  if (!Number.isFinite(idx) || idx < 0) return 0;
+  if (idx <= 1) return Math.min(idx, maxIdx);
+  if (idx === 2 || idx === 3) return Math.min(2, maxIdx);
+  if (idx === 4) return Math.min(3, maxIdx);
+  return Math.min(4, maxIdx);
+}
 
 function num(raw: unknown): number | '' {
   if (raw === '' || raw == null) return '';
@@ -112,7 +139,7 @@ export function normalizeHistoryRow(x: unknown): StageEntry | null {
   if (o.snapshot && typeof o.snapshot === 'object') {
     return {
       id: o.id,
-      stageId: o.stageId as StageEntry['stageId'],
+      stageId: mapLegacyStageIdToCurrent(String(o.stageId)),
       createdAt: o.createdAt,
       snapshot: snapshotFromUnknown(o.snapshot),
     };
@@ -120,7 +147,7 @@ export function normalizeHistoryRow(x: unknown): StageEntry | null {
   if (isLegacyHistoryRow(x)) {
     return {
       id: o.id,
-      stageId: o.stageId as StageEntry['stageId'],
+      stageId: mapLegacyStageIdToCurrent(String(o.stageId)),
       createdAt: o.createdAt,
       snapshot: legacyToSnapshot(x),
     };
@@ -156,10 +183,11 @@ export function migrateAppStateFromUnknown(parsed: unknown): AppState {
       rawDraft && typeof rawDraft === 'object' ? snapshotFromUnknown(rawDraft) : {};
     const rawHistory = Array.isArray(o.history) ? o.history : [];
     const history = rawHistory.map(normalizeHistoryRow).filter((x): x is StageEntry => x !== null);
+    const rawIdx = typeof o.currentStageIndex === 'number' ? o.currentStageIndex : 0;
     return {
       draft,
       history,
-      currentStageIndex: typeof o.currentStageIndex === 'number' ? o.currentStageIndex : 0,
+      currentStageIndex: mapLegacyCurrentStageIndex(rawIdx),
     };
   }
 
@@ -170,9 +198,10 @@ export function migrateAppStateFromUnknown(parsed: unknown): AppState {
     typeof v1.general === 'object' && v1.general !== null
       ? migrateDraftFromLegacyGeneral(v1.general)
       : {};
+  const rawIdx = typeof v1.currentStageIndex === 'number' ? v1.currentStageIndex : 0;
   return {
     draft,
     history,
-    currentStageIndex: typeof v1.currentStageIndex === 'number' ? v1.currentStageIndex : 0,
+    currentStageIndex: mapLegacyCurrentStageIndex(rawIdx),
   };
 }

@@ -1,6 +1,6 @@
 import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
-import { emptySnapshot, normalizeHistoryRow } from './migrate';
+import { emptySnapshot, mapLegacyStageIdToCurrent, normalizeHistoryRow } from './migrate';
 import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
 import { apiUrl } from './api';
 import { isoDatetimeToDateInputValue, todayIsoDate } from './utils/format';
@@ -58,7 +58,7 @@ let stepperPreviousProgressIndex: number | null = null;
 function historyMaxStageIndex(history: readonly StageEntry[]): number {
   let m = -1;
   for (const e of history) {
-    const ix = STAGES.findIndex((s) => s.id === e.stageId);
+    const ix = STAGES.findIndex((s) => s.id === mapLegacyStageIdToCurrent(e.stageId));
     if (ix > m) m = ix;
   }
   return m;
@@ -94,7 +94,11 @@ function mergeLoadedCacheFromStateHistory(state: AppState, oppKey: string): void
     const sn = (e.snapshot.opportunityNumber ?? '').trim().toLowerCase();
     const sc = (e.snapshot.clientId ?? '').trim().toLowerCase();
     if (sn !== needle && sc !== needle) continue;
-    loadedStageDataCache[e.stageId] = { ...e.snapshot.stageData };
+    const targetId = mapLegacyStageIdToCurrent(e.stageId);
+    loadedStageDataCache[targetId] = {
+      ...(loadedStageDataCache[targetId] ?? {}),
+      ...e.snapshot.stageData,
+    };
   }
 }
 
@@ -109,7 +113,7 @@ function latestSnapshotForStageIndex(
   if (!sid) return null;
   let best: StageEntry | null = null;
   for (const e of history) {
-    if (e.stageId !== sid) continue;
+    if (mapLegacyStageIdToCurrent(e.stageId) !== sid) continue;
     const sn = (e.snapshot.opportunityNumber ?? '').trim().toLowerCase();
     const sc = (e.snapshot.clientId ?? '').trim().toLowerCase();
     if (sn !== needle && sc !== needle) continue;
@@ -290,7 +294,7 @@ let opportunityLookupLastKey = '';
 let opportunityAutoNumberTimer: ReturnType<typeof setTimeout> | null = null;
 let opportunityAutoNumberInFlight = false;
 
-function fillIfEmpty(input: HTMLInputElement, value: string): void {
+function fillIfEmpty(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   if (input.value.trim() !== '') return;
   if (!value.trim()) return;
   input.value = value;
@@ -345,7 +349,11 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
       let stn = typeof rawSt === 'number' ? rawSt : parseInt(String(rawSt ?? '1'), 10);
       if (!Number.isFinite(stn)) stn = 1;
       stn = Math.max(1, Math.min(6, stn));
-      crmOpportunityStageIndexFromApi = stn - 1;
+      // CRM con 6 etapas: construcción (3) y envío (4) → una sola etapa UI «Propuesta» (índice 2).
+      if (stn <= 2) crmOpportunityStageIndexFromApi = stn - 1;
+      else if (stn <= 4) crmOpportunityStageIndexFromApi = 2;
+      else if (stn === 5) crmOpportunityStageIndexFromApi = 3;
+      else crmOpportunityStageIndexFromApi = 4;
     }
     fillIfEmpty(els.form.clientName, String(a.client_name ?? ''));
     fillIfEmpty(els.form.clientEmail, String(a.client_email ?? ''));
@@ -401,7 +409,8 @@ async function loadAllStageData(oppNumber: string): Promise<Record<string, Recor
       const sid = row.stageId;
       const sd = snap.stageData;
       if (sid && sd && typeof sd === 'object') {
-        byStage[sid] = { ...sd };
+        const targetId = mapLegacyStageIdToCurrent(String(sid));
+        byStage[targetId] = { ...(byStage[targetId] ?? {}), ...sd };
       }
     }
     return byStage;
@@ -445,7 +454,7 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
     state = { ...state, currentStageIndex: tIdx };
     if (snap) {
       state = { ...state, draft: snap };
-      writeOpportunityForm(els, snap);
+      writeOpportunityForm(els.form, snap);
     } else {
       const st = STAGES[tIdx];
       const sd = st ? loadedStageDataCache[st.id] ?? {} : {};
@@ -937,7 +946,7 @@ export async function mountApp(): Promise<void> {
       const snap = latestSnapshotForStageIndex(nextState.history, opp, idx);
       if (snap) {
         nextState = { ...nextState, draft: cloneSnapshot(snap) };
-        writeOpportunityForm(els, snap);
+        writeOpportunityForm(els.form, snap);
       } else if (newStage && loadedStageDataCache[newStage.id]) {
         nextState = {
           ...nextState,
@@ -946,25 +955,25 @@ export async function mountApp(): Promise<void> {
             stageData: { ...loadedStageDataCache[newStage.id] },
           },
         };
-        writeOpportunityForm(els, nextState.draft);
+        writeOpportunityForm(els.form, nextState.draft);
       } else {
         nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
-        writeOpportunityForm(els, nextState.draft);
+        writeOpportunityForm(els.form, nextState.draft);
       }
     } else {
       const tipSnap = latestSnapshotForStageIndex(nextState.history, opp, idx);
       if (tipSnap) {
         nextState = { ...nextState, draft: cloneSnapshot(tipSnap) };
-        writeOpportunityForm(els, tipSnap);
+        writeOpportunityForm(els.form, tipSnap);
       } else if (newStage && loadedStageDataCache[newStage.id]) {
         nextState = {
           ...nextState,
           draft: { ...nextState.draft, stageData: loadedStageDataCache[newStage.id] ?? {} },
         };
-        writeOpportunityForm(els, nextState.draft);
+        writeOpportunityForm(els.form, nextState.draft);
       } else {
         nextState = { ...nextState, draft: { ...nextState.draft, stageData: {} } };
-        writeOpportunityForm(els, nextState.draft);
+        writeOpportunityForm(els.form, nextState.draft);
       }
     }
 

@@ -28,6 +28,12 @@ const ASIGNACION_FIELDS: StageField[] = [
     ],
   },
   {
+    id: 'nombre_comercial',
+    label: 'Nombre comercial (si aplica)',
+    type: 'text',
+    placeholder: 'Razón social o nombre comercial distinto al contacto',
+  },
+  {
     id: 'tomador_decisiones',
     label: 'Tomador de decisiones',
     type: 'text',
@@ -100,9 +106,9 @@ const REUNION_FIELDS: StageField[] = [
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'presencial', label: 'Presencial' },
-      { value: 'virtual', label: 'Virtual (Teams, Zoom…)' },
-      { value: 'llamada', label: 'Llamada telefónica' },
+      { value: 'presencial', label: 'Reunión presencial' },
+      { value: 'llamada', label: 'Llamada' },
+      { value: 'teams', label: 'Teams' },
     ],
   },
   {
@@ -149,21 +155,16 @@ const REUNION_FIELDS: StageField[] = [
     required: true,
     placeholder: 'Puntos tratados y conclusiones',
   },
-  {
-    id: 'necesidades_adicionales',
-    label: '¿Se identificaron necesidades adicionales?',
-    type: 'textarea',
-    placeholder: 'Si aplica, describir',
-  },
 ];
 
-const CONSTRUCCION_FIELDS: StageField[] = [
+/** Una sola etapa: armado + envío de la propuesta (antes construcción y envío separados). */
+const PROPUESTA_FIELDS: StageField[] = [
   {
     id: 'productos_propuestos',
-    label: 'Productos / servicios propuestos',
+    label: 'Servicio brindado',
     type: 'textarea',
     required: true,
-    placeholder: 'Equipos, licencias, servicios…',
+    placeholder: 'Describe el servicio o producto ofrecido',
   },
   {
     id: 'cantidad_equipos',
@@ -179,24 +180,17 @@ const CONSTRUCCION_FIELDS: StageField[] = [
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'venta', label: 'Venta directa' },
-      { value: 'renta', label: 'Renta / arrendamiento' },
-      { value: 'servicio', label: 'Servicio administrado' },
-      { value: 'mixto', label: 'Mixto' },
+      { value: 'compra_directa', label: 'Compra directa' },
+      { value: 'arrendamiento', label: 'Arrendamiento' },
+      { value: 'comodato', label: 'Comodato' },
     ],
   },
   {
-    id: 'condiciones_comerciales',
-    label: 'Condiciones comerciales',
-    type: 'textarea',
-    required: true,
-    placeholder: 'Descuentos, plazos de pago, garantías…',
-  },
-  {
     id: 'plazo_entrega',
-    label: 'Plazo de entrega estimado',
+    label: 'Plazo de entrega estimado (máx. 5 días)',
     type: 'text',
-    placeholder: 'Ej. 15 días hábiles',
+    required: true,
+    placeholder: 'Máximo 5 días',
   },
   {
     id: 'valor_propuesta',
@@ -204,12 +198,6 @@ const CONSTRUCCION_FIELDS: StageField[] = [
     type: 'number',
     required: true,
     placeholder: '0.00',
-  },
-  {
-    id: 'margen_estimado',
-    label: 'Margen estimado (%)',
-    type: 'number',
-    placeholder: 'Ej. 25',
   },
   {
     id: 'requiere_demo',
@@ -222,9 +210,6 @@ const CONSTRUCCION_FIELDS: StageField[] = [
       { value: 'ya_realizada', label: 'Ya se realizó' },
     ],
   },
-];
-
-const ENVIO_FIELDS: StageField[] = [
   {
     id: 'fecha_envio',
     label: 'Fecha de envío',
@@ -279,17 +264,6 @@ const ENVIO_FIELDS: StageField[] = [
       { value: 'no', label: 'No' },
       { value: 'pendiente', label: 'Pendiente de confirmar' },
     ],
-  },
-  {
-    id: 'fecha_compromiso_respuesta',
-    label: 'Fecha compromiso de respuesta',
-    type: 'date',
-  },
-  {
-    id: 'comentarios_envio',
-    label: 'Comentarios del envío',
-    type: 'textarea',
-    placeholder: 'Detalles adicionales sobre el envío de la propuesta',
   },
 ];
 
@@ -397,22 +371,9 @@ const CIERRE_FIELDS: StageField[] = [
   },
   {
     id: 'numero_orden',
-    label: 'Número de orden / contrato',
+    label: 'Número de ofertas / orden o contrato',
     type: 'text',
-    placeholder: 'Referencia del contrato',
-  },
-  {
-    id: 'forma_pago',
-    label: 'Forma de pago',
-    type: 'select',
-    options: [
-      { value: '', label: 'Seleccionar…' },
-      { value: 'contado', label: 'Contado' },
-      { value: 'credito_30', label: 'Crédito 30 días' },
-      { value: 'credito_60', label: 'Crédito 60 días' },
-      { value: 'credito_90', label: 'Crédito 90 días' },
-      { value: 'parcialidades', label: 'Parcialidades' },
-    ],
+    placeholder: 'Referencia de ofertas u orden contrato',
   },
   {
     id: 'razon_cierre',
@@ -421,25 +382,12 @@ const CIERRE_FIELDS: StageField[] = [
     required: true,
     placeholder: 'Si perdido: precio, competencia, timing… Si ganado: factores de éxito',
   },
-  {
-    id: 'competidor_final',
-    label: 'Competidor final (si perdido)',
-    type: 'text',
-    placeholder: 'Nombre del competidor que ganó',
-  },
-  {
-    id: 'lecciones_aprendidas',
-    label: 'Lecciones aprendidas',
-    type: 'textarea',
-    placeholder: '¿Qué se puede mejorar para futuras oportunidades?',
-  },
 ];
 
 const STAGE_FIELDS: Record<StageId, StageField[]> = {
   asignacion: ASIGNACION_FIELDS,
   reunion: REUNION_FIELDS,
-  construccion: CONSTRUCCION_FIELDS,
-  envio: ENVIO_FIELDS,
+  propuesta: PROPUESTA_FIELDS,
   seguimiento: SEGUIMIENTO_FIELDS,
   cierre: CIERRE_FIELDS,
 };
