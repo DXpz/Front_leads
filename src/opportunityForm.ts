@@ -8,7 +8,6 @@ export type OpportunityFormElements = {
   totalInvoiceAmount: HTMLInputElement;
   territory: HTMLInputElement;
   displaySystemCurrency: HTMLInputElement;
-  opportunityName: HTMLInputElement;
   opportunityNumber: HTMLInputElement;
   documentStatus: HTMLSelectElement;
   opportunityStartDate: HTMLInputElement;
@@ -17,7 +16,6 @@ export type OpportunityFormElements = {
   closingPercent: HTMLInputElement;
   closingPercentLabel: HTMLElement;
   closingPercentBar: HTMLElement;
-  potentialAmount: HTMLInputElement;
   relatedDocClass: HTMLInputElement;
   relatedDocNumber: HTMLInputElement;
   notes: HTMLTextAreaElement;
@@ -37,7 +35,6 @@ export function queryOpportunityFormElements(): OpportunityFormElements {
     totalInvoiceAmount: q<HTMLInputElement>('total-invoice-amount'),
     territory: q<HTMLInputElement>('territory'),
     displaySystemCurrency: q<HTMLInputElement>('display-system-currency'),
-    opportunityName: q<HTMLInputElement>('opportunity-name'),
     opportunityNumber: q<HTMLInputElement>('opportunity-number'),
     documentStatus: q<HTMLSelectElement>('document-status'),
     opportunityStartDate: q<HTMLInputElement>('opportunity-start-date'),
@@ -46,7 +43,6 @@ export function queryOpportunityFormElements(): OpportunityFormElements {
     closingPercent: q<HTMLInputElement>('closing-percent'),
     closingPercentLabel: q<HTMLElement>('closing-percent-label'),
     closingPercentBar: q<HTMLElement>('closing-percent-bar'),
-    potentialAmount: q<HTMLInputElement>('potential-amount'),
     relatedDocClass: q<HTMLInputElement>('related-doc-class'),
     relatedDocNumber: q<HTMLInputElement>('related-doc-number'),
     notes: q<HTMLTextAreaElement>('opportunity-notes'),
@@ -78,7 +74,7 @@ export function readOpportunityForm(
     displaySystemCurrency: els.displaySystemCurrency.type === 'checkbox'
       ? els.displaySystemCurrency.checked
       : els.displaySystemCurrency.value === 'true',
-    opportunityName: els.opportunityName.value.trim(),
+    opportunityName: els.clientName.value.trim(), // Use clientName for opportunityName
     opportunityNumber: els.opportunityNumber.value.trim(),
     clientId: (() => {
       const n = els.opportunityNumber.value.trim();
@@ -89,7 +85,7 @@ export function readOpportunityForm(
     opportunityClosingDate: els.opportunityClosingDate.value,
     openActivitiesCount: numOrEmpty(els.openActivitiesCount.value),
     closingPercent: numOrEmpty(els.closingPercent.value),
-    potentialAmount: numOrEmpty(els.potentialAmount.value),
+    potentialAmount: 0, // Set to 0 as it's removed
     relatedDocClass: els.relatedDocClass.value.trim(),
     relatedDocNumber: els.relatedDocNumber.value.trim(),
     notes: els.notes.value.trim(),
@@ -112,7 +108,6 @@ export function writeOpportunityForm(els: OpportunityFormElements, d: Partial<Op
       els.displaySystemCurrency.value = d.displaySystemCurrency ? 'true' : 'false';
     }
   }
-  if (d.opportunityName !== undefined) els.opportunityName.value = d.opportunityName;
   if (d.opportunityNumber !== undefined) els.opportunityNumber.value = d.opportunityNumber;
   if (d.clientId !== undefined && !els.opportunityNumber.value.trim() && d.clientId.trim()) {
     els.opportunityNumber.value = d.clientId.trim();
@@ -122,7 +117,6 @@ export function writeOpportunityForm(els: OpportunityFormElements, d: Partial<Op
   if (d.opportunityClosingDate !== undefined) els.opportunityClosingDate.value = d.opportunityClosingDate;
   if (d.openActivitiesCount !== undefined) els.openActivitiesCount.value = numStr(d.openActivitiesCount);
   if (d.closingPercent !== undefined) els.closingPercent.value = numStr(d.closingPercent);
-  if (d.potentialAmount !== undefined) els.potentialAmount.value = numStr(d.potentialAmount);
   if (d.relatedDocClass !== undefined) els.relatedDocClass.value = d.relatedDocClass;
   if (d.relatedDocNumber !== undefined) els.relatedDocNumber.value = d.relatedDocNumber;
   if (d.notes !== undefined) els.notes.value = d.notes;
@@ -147,13 +141,11 @@ export function setLeadFormFieldsReadonly(els: OpportunityFormElements, readOnly
     els.sellerName,
     els.totalInvoiceAmount,
     els.territory,
-    els.opportunityName,
     els.opportunityNumber,
     els.opportunityStartDate,
     els.opportunityClosingDate,
     els.openActivitiesCount,
     els.closingPercent,
-    els.potentialAmount,
     els.relatedDocClass,
     els.relatedDocNumber,
     els.notes,

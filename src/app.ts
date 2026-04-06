@@ -2,7 +2,7 @@ import { STAGES, STAGE_COUNT } from './stages';
 import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
 import { emptySnapshot, mapLegacyStageIdToCurrent, normalizeHistoryRow } from './migrate';
 import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
-import { apiUrl } from './api';
+import { apiUrl, apiFetch } from './api';
 import { isoDatetimeToDateInputValue, todayIsoDate } from './utils/format';
 import { escapeHtml } from './utils/escapeHtml';
 import { downloadHistoryCsv } from './utils/historyCsv';
@@ -69,6 +69,10 @@ function effectiveProgressIndex(state: AppState): number {
     return crmOpportunityStageIndexFromApi;
   }
   const h = historyMaxStageIndex(state.history);
+  // Si no hay historial, pero empezamos en la etapa 1, el progreso efectivo es 0 (Asignación completada)
+  if (h < 0 && state.currentStageIndex > 0) {
+    return 0;
+  }
   return Math.max(0, h);
 }
 
@@ -83,8 +87,9 @@ function furthestReachedStageIndex(state: AppState): number {
 
 function isCurrentStageEditable(state: AppState): boolean {
   const f = furthestReachedStageIndex(state);
-  if (f < 0) return true;
-  return state.currentStageIndex === f;
+  // La etapa actual es editable si es la más lejana alcanzada o si está más allá.
+  // Esto permite avanzar a una nueva etapa y que sea editable inmediatamente.
+  return state.currentStageIndex >= f;
 }
 
 function mergeLoadedCacheFromStateHistory(state: AppState, oppKey: string): void {
@@ -163,6 +168,7 @@ type Elements = {
   gateClientId: HTMLInputElement;
   gateContinue: HTMLButtonElement;
   gateHint: HTMLElement;
+  gateError: HTMLElement;
   btnChangeClientId: HTMLButtonElement;
   pageHeader: HTMLElement;
 };
@@ -212,6 +218,7 @@ function queryElements(): Elements {
     gateClientId: q<HTMLInputElement>('gate-client-id'),
     gateContinue: q<HTMLButtonElement>('gate-continue'),
     gateHint: q('gate-hint'),
+    gateError: q('gate-error'),
     btnChangeClientId: q<HTMLButtonElement>('btn-change-client-id'),
     pageHeader: q('app-page-header'),
   };
@@ -241,30 +248,56 @@ function syncHistorySearchWithOpportunity(els: Elements, state: AppState): void 
   void paintHistoryTable(els, state);
 }
 
+async function validateClientExists(clientId: string): Promise<boolean> {
+  if (!clientId.trim()) {
+    return false;
+  }
+  try {
+    const response = await apiFetch(`/api/opportunity?number=${encodeURIComponent(clientId)}`);
+    // Si la respuesta es OK (200), el cliente existe. Si es 404, no existe.
+    return response.ok;
+  } catch (error) {
+    console.error('Error validando el cliente:', error);
+    return false;
+  }
+}
+
+
 async function applyClientIdAndOpenWorkspace(
   els: Elements,
   state: AppState,
   rawId: string,
 ): Promise<AppState> {
-  const id = rawId.trim();
-  if (!id) {
-    els.gateHint.textContent = 'Escribe el ID del cliente para continuar.';
-    return state;
+  try {
+    const id = rawId.trim();
+    if (!id) {
+      els.gateHint.textContent = 'Escribe el ID del cliente para continuar.';
+      return state;
+    }
+    els.gateHint.textContent = '';
+    sessionStorage.setItem(SESSION_CLIENT_KEY, id);
+    els.gateClientId.value = id;
+    mergeLoadedCacheFromStateHistory(state, id);
+    writeOpportunityForm(els.form, state.draft);
+    els.form.opportunityNumber.value = id;
+    ensureDefaultDates(els);
+    setGateVisibility(els, false);
+    opportunityLookupLastKey = '';
+    let s = await lookupOpportunityAndFill(els, state);
+    s = persistDraft(els, s);
+    fullRender(els, s);
+    syncHistorySearchWithOpportunity(els, s);
+    return s;
+  } catch (error) {
+    console.error('ERROR FATAL AL ABRIR EL WORKSPACE:', error);
+    els.gateError.textContent = 'Ocurrió un error al cargar el formulario. Revisa la consola.';
+    els.gateError.style.display = 'block';
+    // Reset UI to prevent freeze
+    els.gateContinue.disabled = false;
+    els.gateContinue.textContent = 'Continuar al formulario';
+    els.gateClientId.disabled = false;
+    return state; // Devuelve el estado original
   }
-  els.gateHint.textContent = '';
-  sessionStorage.setItem(SESSION_CLIENT_KEY, id);
-  els.gateClientId.value = id;
-  mergeLoadedCacheFromStateHistory(state, id);
-  writeOpportunityForm(els.form, state.draft);
-  els.form.opportunityNumber.value = id;
-  ensureDefaultDates(els);
-  setGateVisibility(els, false);
-  opportunityLookupLastKey = '';
-  let s = await lookupOpportunityAndFill(els, state);
-  s = persistDraft(els, s);
-  fullRender(els, s);
-  syncHistorySearchWithOpportunity(els, s);
-  return s;
 }
 
 /** Guarda el borrador solo en localStorage (sin llamar a la API). */
@@ -304,8 +337,9 @@ function fillIfEmpty(input: HTMLInputElement | HTMLTextAreaElement, value: strin
 async function refreshSellerNameDatalist(): Promise<void> {
   const dl = document.getElementById('seller-name-list');
   if (!dl || !(dl instanceof HTMLDataListElement)) return;
+  if (dl.options.length > 0) return; // Evita recargas innecesarias en HMR
   try {
-    const r = await fetch(apiUrl('/api/metrics/lista-asesores'));
+    const r = await apiFetch('/api/metrics/lista-asesores');
     if (!r.ok) return;
     const data = (await r.json()) as { asesores?: { asesor?: string }[] };
     const rows = Array.isArray(data.asesores) ? data.asesores : [];
@@ -333,7 +367,7 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
     return;
   }
   try {
-    const r = await fetch(apiUrl(`/api/audit/by-client/${encodeURIComponent(cid)}`));
+    const r = await apiFetch(`/api/audit/by-client/${encodeURIComponent(cid)}`);
     if (!r.ok) {
       crmOpportunityStageIndexFromApi = -1;
       return;
@@ -355,19 +389,19 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
       else if (stn === 5) crmOpportunityStageIndexFromApi = 3;
       else crmOpportunityStageIndexFromApi = 4;
     }
-    fillIfEmpty(els.form.clientName, String(a.client_name ?? ''));
-    fillIfEmpty(els.form.clientEmail, String(a.client_email ?? ''));
-    fillIfEmpty(els.form.clientPhone, String(a.client_phone ?? ''));
-    fillIfEmpty(els.form.sellerName, String(a.advisor_name ?? ''));
-    fillIfEmpty(els.form.opportunityName, String(a.subject ?? ''));
+    els.form.clientName.value = String(a.client_name ?? '');
+    els.form.clientEmail.value = String(a.client_email ?? '');
+    els.form.clientPhone.value = String(a.client_phone ?? '');
+    els.form.sellerName.value = String(a.advisor_name ?? '');
+    els.form.clientName.value = String(a.subject ?? '');
     const st = isoDatetimeToDateInputValue(a.start_time as string | undefined);
     const en = isoDatetimeToDateInputValue(a.end_time as string | undefined);
-    if (st) fillIfEmpty(els.form.opportunityStartDate, st);
-    if (en) fillIfEmpty(els.form.opportunityClosingDate, en);
-    fillIfEmpty(els.form.territory, String(a.country ?? ''));
-    fillIfEmpty(els.form.notes, String(a.description ?? ''));
+    if (st) els.form.opportunityStartDate.value = st;
+    if (en) els.form.opportunityClosingDate.value = en;
+    els.form.territory.value = String(a.country ?? '');
+    els.form.notes.value = String(a.description ?? '');
     if (a.id != null && String(a.id).trim() !== '') {
-      fillIfEmpty(els.form.relatedDocNumber, String(a.id));
+      els.form.relatedDocNumber.value = String(a.id);
     }
   } catch {
     crmOpportunityStageIndexFromApi = -1;
@@ -382,7 +416,7 @@ async function loadAllStageData(oppNumber: string): Promise<Record<string, Recor
   if (!oppNumber) return {};
   const needle = oppNumber.trim().toLowerCase();
   try {
-    const r = await fetch(apiUrl('/api/state'));
+    const r = await apiFetch('/api/state');
     if (!r.ok) return {};
     const body = (await r.json()) as { history?: unknown[] };
     const rawHistory = Array.isArray(body.history) ? body.history : [];
@@ -430,14 +464,14 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   opportunityLookupLastKey = key;
 
   try {
-    const r = await fetch(apiUrl(`/api/opportunity?number=${encodeURIComponent(key)}`));
+    const r = await apiFetch(`/api/opportunity?number=${encodeURIComponent(key)}`);
     if (r.ok) {
       const d = (await r.json()) as OpportunityDirectory;
       if (d && typeof d === 'object') {
-        fillIfEmpty(els.form.clientName, d.clientName ?? '');
-        fillIfEmpty(els.form.clientEmail, d.clientEmail ?? '');
-        fillIfEmpty(els.form.clientPhone, d.clientPhone ?? '');
-        fillIfEmpty(els.form.sellerName, d.sellerName ?? '');
+        els.form.clientName.value = d.clientName ?? '';
+        els.form.clientEmail.value = d.clientEmail ?? '';
+        els.form.clientPhone.value = d.clientPhone ?? '';
+        els.form.sellerName.value = d.sellerName ?? '';
       }
     }
   } catch {
@@ -484,7 +518,7 @@ async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
   if (opportunityAutoNumberInFlight) return;
   if (els.form.opportunityNumber.value.trim()) return;
   // Si aún no hay nombre de oportunidad, no asignamos número.
-  if (!els.form.opportunityName.value.trim()) return;
+  if (!els.form.clientName.value.trim()) return;
   opportunityAutoNumberInFlight = true;
   try {
     const n = nextLocalOpportunityNumber();
@@ -630,11 +664,11 @@ async function paintHistoryTable(els: Elements, state: AppState): Promise<void> 
   try {
     const q = encodeURIComponent(trimmed);
     const merge = '&mergeAudit=1';
-    let r = await fetch(apiUrl(`/api/history?opportunityNumber=${q}${merge}`));
+    let r = await apiFetch(`/api/history?opportunityNumber=${q}${merge}`);
     if (!r.ok) throw new Error('api');
     let data = (await r.json()) as { entries: unknown[]; total: number };
     if (!data.entries?.length) {
-      const r2 = await fetch(apiUrl(`/api/history?clientId=${q}${merge}`));
+      const r2 = await apiFetch(`/api/history?clientId=${q}${merge}`);
       if (r2.ok) {
         data = (await r2.json()) as { entries: unknown[]; total: number };
       }
@@ -741,15 +775,61 @@ export async function mountApp(): Promise<void> {
   const sessionId = (sessionStorage.getItem(SESSION_CLIENT_KEY) ?? '').trim();
   const draftOpp = (state.draft.opportunityNumber ?? '').trim();
   const suggestedId = (urlClientId || sessionId || draftOpp).trim();
-  if (suggestedId) els.gateClientId.value = suggestedId;
+
 
   setGateVisibility(els, true);
   requestAnimationFrame(() => els.gateClientId.focus());
 
-  els.gateContinue.addEventListener('click', () => {
-    void applyClientIdAndOpenWorkspace(els, state, els.gateClientId.value).then((s) => {
-      state = s;
-    });
+  els.gateContinue.addEventListener('click', async () => {
+    const clientId = els.gateClientId.value.trim();
+
+    // Reset states
+    els.gateError.style.display = 'none';
+    els.gateClientId.classList.remove('shake-animation', 'input-error', 'input-success');
+    els.gateHint.textContent = '';
+
+    if (!clientId) {
+      els.gateError.textContent = 'Por favor, escribe un ID de cliente.';
+      els.gateError.style.display = 'block';
+      els.gateClientId.classList.add('shake-animation', 'input-error');
+      els.gateClientId.focus();
+      return;
+    }
+
+    // Show loading state
+    els.gateContinue.disabled = true;
+    els.gateContinue.textContent = 'Verificando...';
+    els.gateClientId.disabled = true;
+
+    const clientExists = await validateClientExists(clientId);
+
+    if (clientExists) {
+      // Success state
+      els.gateClientId.classList.add('input-success');
+      els.gateHint.textContent = 'Cliente encontrado. Abriendo formulario...';
+
+      // Wait a bit so the user can see the success message
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Await the workspace opening and get the new state
+      state = await applyClientIdAndOpenWorkspace(els, state, clientId);
+
+      // The function above now handles showing the workspace, so we just reset the button
+      // for the next time the user might come back to this screen.
+      els.gateContinue.disabled = false;
+      els.gateContinue.textContent = 'Continuar al formulario';
+      els.gateClientId.disabled = false;
+    } else {
+      // Failure state
+      els.gateContinue.disabled = false;
+      els.gateContinue.textContent = 'Continuar al formulario';
+      els.gateClientId.disabled = false;
+
+      els.gateError.textContent = 'El cliente no existe. Por favor, verifica el ID.';
+      els.gateError.style.display = 'block';
+      els.gateClientId.classList.add('shake-animation', 'input-error');
+      els.gateClientId.focus();
+    }
   });
   els.gateClientId.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -768,6 +848,10 @@ export async function mountApp(): Promise<void> {
     void els.gateClientId.focus();
   });
 
+  els.gateClientId.addEventListener('input', () => {
+    els.gateClientId.value = els.gateClientId.value.toUpperCase();
+  });
+
   // Observaciones siempre debajo de Cliente (columna izquierda) para evitar huecos.
   if (els.obsBlock.parentElement !== els.leftStack) {
     els.leftStack.appendChild(els.obsBlock);
@@ -779,12 +863,10 @@ export async function mountApp(): Promise<void> {
     els.form.clientEmail,
     els.form.clientPhone,
     els.form.sellerName,
-    els.form.opportunityName,
     els.form.opportunityNumber,
     els.form.documentStatus,
     els.form.opportunityStartDate,
     els.form.opportunityClosingDate,
-    els.form.potentialAmount,
     els.form.notes,
   ];
 
@@ -811,7 +893,7 @@ export async function mountApp(): Promise<void> {
       });
     }, 300);
   };
-  els.form.opportunityNumber.addEventListener('blur', doOpportunityLookup);
+
   els.form.opportunityNumber.addEventListener('change', doOpportunityLookup);
 
   // Autonumeración: al escribir el nombre de oportunidad o al salir del campo,
@@ -826,9 +908,9 @@ export async function mountApp(): Promise<void> {
       });
     }, 350);
   };
-  els.form.opportunityName.addEventListener('input', scheduleAutoNumber);
-  els.form.opportunityName.addEventListener('change', scheduleAutoNumber);
-  els.form.opportunityName.addEventListener('blur', scheduleAutoNumber);
+  els.form.clientName.addEventListener('input', scheduleAutoNumber);
+  els.form.clientName.addEventListener('change', scheduleAutoNumber);
+  els.form.clientName.addEventListener('blur', scheduleAutoNumber);
   els.form.opportunityNumber.addEventListener('focus', scheduleAutoNumber);
 
   // Al confirmar nº oportunidad, refresca actividades (contador) desde BD.
@@ -1022,11 +1104,12 @@ export async function mountApp(): Promise<void> {
       history: [...state.history, entry],
     };
 
+    const submittedStageIdx = STAGES.indexOf(stage);
+
     if (els.advanceNext.checked && state.currentStageIndex < STAGE_COUNT - 1) {
       state = { ...state, currentStageIndex: state.currentStageIndex + 1 };
     }
 
-    const submittedStageIdx = STAGES.indexOf(stage);
     const advancedToNext = els.advanceNext.checked && state.currentStageIndex > submittedStageIdx;
 
     void (async () => {
@@ -1060,7 +1143,7 @@ export async function mountApp(): Promise<void> {
       }
 
       if (snapshot.opportunityNumber.trim()) {
-        void fetch(apiUrl('/api/opportunity'), {
+        void apiFetch('/api/opportunity', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -8,7 +8,7 @@ const STORAGE_KEY_V1 = 'formulario-leads-v1';
 const defaultState = (): AppState => ({
   draft: {},
   history: [],
-  currentStageIndex: 0,
+  currentStageIndex: 1, // Empezar en Reunión
 });
 
 function parseStored(raw: string): AppState {

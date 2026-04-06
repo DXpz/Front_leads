@@ -310,3 +310,31 @@
   padding: 1rem;
 }
 /* Observaciones se reubica por JS al abrir/cerrar Cliente */
+
+.input-error {
+  border-color: #d9534f !important; /* Red */
+  box-shadow: 0 0 0 2px rgb(217 83 79 / 25%) !important;
+}
+
+.input-success {
+  border-color: #5cb85c !important; /* Green */
+  box-shadow: 0 0 0 2px rgb(92 184 92 / 25%) !important;
+}
+
+/* Estilos para el mensaje de error y la animación */
+.input-error-message {
+  color: #d9534f; /* Rojo */
+  font-size: 0.875em;
+  margin-top: 4px;
+  display: none; /* Oculto por defecto */
+}
+
+.shake-animation {
+  animation: shake 0.5s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+  20%, 40%, 60%, 80% { transform: translateX(10px); }
+}

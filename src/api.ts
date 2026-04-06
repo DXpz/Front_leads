@@ -11,3 +11,16 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+export function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const url = apiUrl(path);
+  const headers = {
+    ...options?.headers,
+    'ngrok-skip-browser-warning': 'true',
+  };
+
+  return fetch(url, {
+    ...options,
+    headers,
+  });
+}
+
