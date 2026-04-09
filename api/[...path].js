@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   const base = (process.env.API_UPSTREAM ?? '').trim().replace(/\/+$/, '');
 
   if (!base) {
-    res.status(500).json({ error: 'API_UPSTREAM no definida en Vercel → Settings → Environment Variables.' });
+    res.status(500).json({ error: 'API_UPSTREAM no definida en Vercel.' });
     return;
   }
 
@@ -25,27 +25,36 @@ export default async function handler(req, res) {
   const target = `${base}/api/${suffix}${queryString ? `?${queryString}` : ''}`;
 
   // Cabeceras al upstream
-  const headers = {};
-  headers['ngrok-skip-browser-warning'] = 'true';
+  const upstreamHeaders = {};
+  upstreamHeaders['ngrok-skip-browser-warning'] = 'true';
   const apiKey = req.headers['x-api-key'];
-  if (apiKey) headers['X-API-Key'] = Array.isArray(apiKey) ? apiKey[0] : apiKey;
+  if (apiKey) upstreamHeaders['X-API-Key'] = Array.isArray(apiKey) ? apiKey[0] : apiKey;
   const contentType = req.headers['content-type'];
-  if (contentType) headers['Content-Type'] = Array.isArray(contentType) ? contentType[0] : contentType;
+  if (contentType) upstreamHeaders['Content-Type'] = Array.isArray(contentType) ? contentType[0] : contentType;
   const accept = req.headers['accept'];
-  if (accept) headers['Accept'] = Array.isArray(accept) ? accept[0] : accept;
+  if (accept) upstreamHeaders['Accept'] = Array.isArray(accept) ? accept[0] : accept;
 
   const method = req.method ?? 'GET';
   let body;
   if (method !== 'GET' && method !== 'HEAD') {
     if (req.body != null) {
       body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      if (!contentType) headers['Content-Type'] = 'application/json';
+      if (!contentType) upstreamHeaders['Content-Type'] = 'application/json';
     }
   }
 
-  const upstream = await fetch(target, { method, headers, body });
-
-  const outType = upstream.headers.get('content-type');
-  if (outType) res.setHeader('Content-Type', outType);
-  res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
+  try {
+    const upstream = await fetch(target, { method, headers: upstreamHeaders, body });
+    const outType = upstream.headers.get('content-type');
+    if (outType) res.setHeader('Content-Type', outType);
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    res.status(upstream.status).send(buffer);
+  } catch (err) {
+    console.error('[proxy] Error al contactar upstream:', target, err);
+    res.status(502).json({
+      error: 'No se pudo conectar con el backend.',
+      target,
+      detail: String(err),
+    });
+  }
 }

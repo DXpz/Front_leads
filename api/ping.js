@@ -5,22 +5,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  let apiStatus = null;
-  let apiBody = null;
-  try {
-    const r = await fetch(`${upstream}/api/state`, {
-      headers: { 'X-API-Key': process.env.VITE_API_KEY ?? '', 'ngrok-skip-browser-warning': 'true' },
-    });
-    apiStatus = r.status;
-    apiBody = await r.text();
-  } catch (e) {
-    apiBody = String(e);
+  const key = process.env.VITE_API_KEY ?? '';
+  const headers = { 'X-API-Key': key, 'ngrok-skip-browser-warning': 'true' };
+
+  const tests = {};
+  for (const path of ['/api/state', '/api/metrics/lista-asesores']) {
+    try {
+      const r = await fetch(`${upstream}${path}`, { headers });
+      tests[path] = { status: r.status, body: await r.text() };
+    } catch (e) {
+      tests[path] = { error: String(e) };
+    }
   }
 
-  res.status(200).json({
-    ok: true,
-    API_UPSTREAM: upstream,
-    upstream_status: apiStatus,
-    upstream_body: apiBody,
-  });
+  res.status(200).json({ ok: true, API_UPSTREAM: upstream, tests });
 }
