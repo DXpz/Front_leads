@@ -1,4 +1,5 @@
 import type { StageId } from './types';
+import { todayIsoDate } from './utils/format';
 
 export type FieldType = 'text' | 'textarea' | 'select' | 'date' | 'number' | 'checkbox';
 
@@ -9,12 +10,14 @@ export type StageField = {
   placeholder?: string;
   required?: boolean;
   options?: { value: string; label: string }[];
+  /** Si se define, el campo solo se muestra cuando `field` tiene uno de `values`. */
+  showWhen?: { field: string; values: string[] };
 };
 
 const ASIGNACION_FIELDS: StageField[] = [
   {
     id: 'lead_origen',
-    label: 'Origen del lead',
+    label: '¿Cómo llegó el lead?',
     type: 'select',
     required: true,
     options: [
@@ -28,46 +31,89 @@ const ASIGNACION_FIELDS: StageField[] = [
     ],
   },
   {
-    id: 'nombre_comercial',
-    label: 'Nombre comercial (si aplica)',
-    type: 'text',
-    placeholder: 'Razón social o nombre comercial distinto al contacto',
-  },
-  {
-    id: 'tomador_decisiones',
-    label: 'Tomador de decisiones',
-    type: 'text',
-    required: true,
-    placeholder: 'Nombre del decisor',
-  },
-  {
-    id: 'cargo_decisor',
-    label: 'Cargo del decisor',
-    type: 'text',
-    placeholder: 'Ej. Director, Gerente, Jefe de compras…',
-  },
-  {
-    id: 'sector_industria',
-    label: 'Sector / industria',
-    type: 'text',
-    required: true,
-    placeholder: 'Ej. Seguridad, Transporte, Gobierno…',
-  },
-  {
-    id: 'tamano_empresa',
-    label: 'Tamaño de la empresa',
+    id: 'pais_mercado',
+    label: 'País',
     type: 'select',
+    required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'micro', label: 'Micro (1-10 empleados)' },
-      { value: 'pequena', label: 'Pequeña (11-50)' },
-      { value: 'mediana', label: 'Mediana (51-250)' },
-      { value: 'grande', label: 'Grande (250+)' },
+      { value: 'SV', label: 'El Salvador' },
+      { value: 'GT', label: 'Guatemala' },
+      { value: 'otro_latam', label: 'Otro' },
     ],
   },
   {
+    id: 'industria_sector',
+    label: 'Sector del cliente',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'logistica_transporte', label: 'Logística o transporte' },
+      { value: 'industria', label: 'Industria' },
+      { value: 'construccion', label: 'Construcción' },
+      { value: 'turismo_hoteleria', label: 'Turismo u hoteles' },
+      { value: 'seguridad_privada', label: 'Seguridad privada' },
+      { value: 'gobierno', label: 'Gobierno' },
+      { value: 'otro', label: 'Otro' },
+    ],
+  },
+  {
+    id: 'nombre_comercial',
+    label: 'Nombre comercial (si aplica)',
+    type: 'text',
+    placeholder: 'Empresa o razón social',
+  },
+  {
+    id: 'tomador_decisiones',
+    label: 'Quién decide',
+    type: 'text',
+    required: true,
+    placeholder: 'Nombre',
+  },
+  {
+    id: 'cargo_decisor',
+    label: 'Cargo',
+    type: 'text',
+    placeholder: 'Ej. Gerente, supervisor…',
+  },
+  {
+    id: 'tamano_empresa',
+    label: 'Tamaño aproximado',
+    type: 'select',
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'micro', label: '1-10 personas' },
+      { value: 'pequena', label: '11-50' },
+      { value: 'mediana', label: '51-250' },
+      { value: 'grande', label: 'Más de 250' },
+    ],
+  },
+  {
+    id: 'solucion_comunicacion_actual',
+    label: '¿Qué usan hoy para comunicarse en operación?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'nada', label: 'Nada definido' },
+      { value: 'celular', label: 'Celular' },
+      { value: 'analogicas', label: 'Radios analógicas' },
+      { value: 'digitales_otra_red', label: 'Radios digitales (otra marca)' },
+      { value: 'trunking_walkie', label: 'Trunking o walkie' },
+      { value: 'otro', label: 'Otro' },
+    ],
+  },
+  {
+    id: 'necesidad_identificada',
+    label: '¿Qué necesitan o qué problema quieren resolver?',
+    type: 'textarea',
+    required: true,
+    placeholder: 'Breve: voz, ubicación, rondas, tareas, video, etc.',
+  },
+  {
     id: 'prioridad_lead',
-    label: 'Prioridad del lead',
+    label: 'Prioridad',
     type: 'select',
     required: true,
     options: [
@@ -79,135 +125,217 @@ const ASIGNACION_FIELDS: StageField[] = [
   },
   {
     id: 'competencia_detectada',
-    label: 'Competencia detectada',
+    label: '¿Usan otra marca o proveedor?',
     type: 'text',
-    placeholder: 'Marcas o proveedores actuales del cliente',
-  },
-  {
-    id: 'necesidad_identificada',
-    label: 'Necesidad identificada',
-    type: 'textarea',
-    required: true,
-    placeholder: 'Describe la necesidad del cliente',
+    placeholder: 'Si no, dejar vacío',
   },
 ];
 
 const REUNION_FIELDS: StageField[] = [
   {
     id: 'fecha_reunion',
-    label: 'Fecha de la reunión',
+    label: 'Fecha',
     type: 'date',
     required: true,
   },
   {
     id: 'tipo_reunion',
-    label: 'Tipo de reunión',
+    label: 'Tipo',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'presencial', label: 'Reunión presencial' },
+      { value: 'presencial', label: 'Presencial' },
       { value: 'llamada', label: 'Llamada' },
       { value: 'teams', label: 'Teams' },
     ],
   },
   {
     id: 'lugar_reunion',
-    label: 'Lugar / plataforma',
+    label: 'Lugar o enlace',
     type: 'text',
-    placeholder: 'Oficina del cliente, Teams, Zoom…',
+    placeholder: 'Dirección, sala, link…',
   },
   {
-    id: 'participantes',
-    label: 'Participantes',
-    type: 'text',
+    id: 'asistentes_reunion',
+    label: '¿Quiénes asistieron? (nombre y cargo)',
+    type: 'textarea',
     required: true,
-    placeholder: 'Nombres de los asistentes',
+    placeholder: 'Una línea por persona si quieres',
   },
   {
     id: 'duracion_reunion',
-    label: 'Duración estimada',
-    type: 'select',
-    options: [
-      { value: '', label: 'Seleccionar…' },
-      { value: '15min', label: '15 minutos' },
-      { value: '30min', label: '30 minutos' },
-      { value: '1h', label: '1 hora' },
-      { value: 'mas_1h', label: 'Más de 1 hora' },
-    ],
-  },
-  {
-    id: 'interes_cliente',
-    label: 'Nivel de interés del cliente',
+    label: '¿Cuánto duró?',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'alto', label: 'Alto' },
-      { value: 'medio', label: 'Medio' },
-      { value: 'bajo', label: 'Bajo' },
+      { value: '15min', label: '15 min' },
+      { value: '30min', label: '30 min' },
+      { value: '45min', label: '45 min' },
+      { value: '1h', label: '1 h' },
+      { value: 'mas_1h', label: 'Más de 1 h' },
     ],
   },
   {
-    id: 'resultado_reunion',
-    label: 'Resultado de la reunión',
+    id: 'interes_producto',
+    label: '¿Interesados en la solución RED?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'no', label: 'No' },
+      { value: 'evaluando', label: 'Lo evalúan' },
+    ],
+  },
+  {
+    id: 'aclaracion_comercial_red',
+    label: '¿Quedó claro que es servicio por contrato con mensualidad (no walkie común)?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'parcial', label: 'Más o menos' },
+      { value: 'no', label: 'No se habló' },
+    ],
+  },
+  {
+    id: 'temas_tratados',
+    label: '¿De qué hablaron?',
     type: 'textarea',
     required: true,
-    placeholder: 'Puntos tratados y conclusiones',
+    placeholder: 'Temas principales',
+  },
+  {
+    id: 'productos_ofrecidos',
+    label: '¿Qué les ofrecieron?',
+    type: 'textarea',
+    required: true,
+    placeholder: 'Equipos, plan, módulos…',
+  },
+  {
+    id: 'tienen_radios',
+    label: '¿Ya tienen radios?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'no', label: 'No' },
+    ],
+  },
+  {
+    id: 'tipo_radios',
+    label: '¿Cuáles son?',
+    type: 'text',
+    placeholder: 'Marca, modelo, cantidad aproximada…',
+    showWhen: { field: 'tienen_radios', values: ['si'] },
   },
 ];
 
-/** Una sola etapa: armado + envío de la propuesta (antes construcción y envío separados). */
 const PROPUESTA_FIELDS: StageField[] = [
   {
     id: 'productos_propuestos',
-    label: 'Servicio brindado',
+    label: 'En pocas palabras, ¿qué oferta es?',
     type: 'textarea',
     required: true,
-    placeholder: 'Describe el servicio o producto ofrecido',
+    placeholder: 'Qué incluye y para qué sirve al cliente',
+  },
+  {
+    id: 'modelo_equipo_propuesto',
+    label: 'Modelo de radio',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'fmt1001', label: 'FMT-1001 (con pantalla)' },
+      { value: 'tsp4', label: 'TSP-4 (sin pantalla)' },
+      { value: 'mixto', label: 'Mixto' },
+      { value: 'por_definir', label: 'Por definir' },
+    ],
   },
   {
     id: 'cantidad_equipos',
-    label: 'Cantidad de equipos / licencias',
+    label: 'Cantidad de equipos',
     type: 'number',
     required: true,
     placeholder: '0',
   },
   {
     id: 'tipo_solucion',
-    label: 'Tipo de solución',
+    label: 'Tipo de negocio',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'compra_directa', label: 'Compra directa' },
+      { value: 'compra_directa', label: 'Compra' },
       { value: 'arrendamiento', label: 'Arrendamiento' },
       { value: 'comodato', label: 'Comodato' },
     ],
   },
   {
+    id: 'plan_contrato_meses',
+    label: 'Contrato (meses)',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: '12', label: '12' },
+      { value: '18', label: '18' },
+      { value: '24', label: '24' },
+      { value: '34', label: '34' },
+      { value: 'otro', label: 'Otro' },
+    ],
+  },
+  {
+    id: 'mercado_precio_referencia',
+    label: 'Cotización según país',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'SV', label: 'El Salvador' },
+      { value: 'GT', label: 'Guatemala' },
+      { value: 'otro', label: 'Otro' },
+    ],
+  },
+  {
+    id: 'extras_oferta',
+    label: '¿Incluye teléfono/datos o radios con IA?',
+    type: 'select',
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'no', label: 'No' },
+      { value: 'telefonia_datos', label: 'Teléfono o datos' },
+      { value: 'radios_ia', label: 'Radios inteligentes' },
+      { value: 'ambos', label: 'Ambos' },
+    ],
+  },
+  {
     id: 'plazo_entrega',
-    label: 'Plazo de entrega estimado (máx. 5 días)',
+    label: 'Plazo de entrega (ej. máx. 5 días)',
     type: 'text',
     required: true,
-    placeholder: 'Máximo 5 días',
+    placeholder: 'Ej. 5 días',
   },
   {
     id: 'valor_propuesta',
-    label: 'Valor de la propuesta',
+    label: 'Monto de la propuesta',
     type: 'number',
     required: true,
     placeholder: '0.00',
   },
   {
     id: 'requiere_demo',
-    label: '¿Requiere demostración o prueba?',
+    label: '¿Necesitan demo?',
     type: 'select',
     options: [
       { value: '', label: 'Seleccionar…' },
       { value: 'si', label: 'Sí' },
       { value: 'no', label: 'No' },
-      { value: 'ya_realizada', label: 'Ya se realizó' },
+      { value: 'ya_realizada', label: 'Ya la tuvieron' },
     ],
   },
   {
@@ -270,45 +398,51 @@ const PROPUESTA_FIELDS: StageField[] = [
 const SEGUIMIENTO_FIELDS: StageField[] = [
   {
     id: 'fecha_seguimiento',
-    label: 'Fecha del último seguimiento',
+    label: 'Fecha del contacto',
     type: 'date',
     required: true,
   },
   {
     id: 'medio_seguimiento',
-    label: 'Medio de contacto',
+    label: 'Cómo contactaron',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
       { value: 'llamada', label: 'Llamada' },
-      { value: 'correo', label: 'Correo electrónico' },
-      { value: 'visita', label: 'Visita presencial' },
-      { value: 'whatsapp', label: 'WhatsApp / mensaje' },
+      { value: 'correo', label: 'Correo' },
+      { value: 'visita', label: 'Visita' },
+      { value: 'whatsapp', label: 'WhatsApp' },
     ],
   },
   {
+    id: 'tema_seguimiento',
+    label: '¿De qué hablaron? (precio, equipos, cobertura, otra cosa)',
+    type: 'text',
+    placeholder: 'Tema principal',
+  },
+  {
     id: 'respuesta_cliente',
-    label: 'Respuesta del cliente',
+    label: '¿Cómo reaccionó el cliente?',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'positiva', label: 'Positiva' },
+      { value: 'positiva', label: 'Bien / positivo' },
       { value: 'neutral', label: 'Neutral' },
-      { value: 'negativa', label: 'Negativa' },
-      { value: 'sin_respuesta', label: 'Sin respuesta' },
+      { value: 'negativa', label: 'Mal / negativo' },
+      { value: 'sin_respuesta', label: 'No respondió' },
     ],
   },
   {
     id: 'objeciones',
-    label: 'Objeciones del cliente',
+    label: 'Dudas u objeciones',
     type: 'textarea',
-    placeholder: 'Precio, tiempo, competencia…',
+    placeholder: 'Si no hay, dejar vacío',
   },
   {
     id: 'requiere_ajustes',
-    label: '¿Requiere ajustes a la propuesta?',
+    label: '¿Hay que cambiar la propuesta?',
     type: 'select',
     options: [
       { value: '', label: 'Seleccionar…' },
@@ -318,27 +452,27 @@ const SEGUIMIENTO_FIELDS: StageField[] = [
   },
   {
     id: 'nivel_avance',
-    label: 'Nivel de avance hacia el cierre',
+    label: '¿Qué tan cerca va el cierre?',
     type: 'select',
     required: true,
     options: [
       { value: '', label: 'Seleccionar…' },
-      { value: 'muy_cerca', label: 'Muy cerca de cerrar' },
-      { value: 'en_negociacion', label: 'En negociación activa' },
-      { value: 'estancado', label: 'Estancado' },
-      { value: 'en_riesgo', label: 'En riesgo de perder' },
+      { value: 'muy_cerca', label: 'Muy cerca' },
+      { value: 'en_negociacion', label: 'En negociación' },
+      { value: 'estancado', label: 'Parado' },
+      { value: 'en_riesgo', label: 'En riesgo' },
     ],
   },
   {
     id: 'proximo_paso',
-    label: 'Próximo paso acordado',
+    label: 'Próximo paso',
     type: 'textarea',
     required: true,
-    placeholder: 'Acción concreta y fecha tentativa',
+    placeholder: 'Qué sigue y cuándo',
   },
   {
     id: 'fecha_proximo_contacto',
-    label: 'Fecha del próximo contacto',
+    label: 'Próxima fecha de contacto',
     type: 'date',
   },
 ];
@@ -358,29 +492,54 @@ const CIERRE_FIELDS: StageField[] = [
   },
   {
     id: 'fecha_cierre_real',
-    label: 'Fecha de cierre real',
+    label: 'Fecha',
     type: 'date',
     required: true,
   },
   {
+    id: 'moneda_cierre',
+    label: 'Moneda',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'USD', label: 'Dólares (SV)' },
+      { value: 'GTQ', label: 'Quetzales (GT)' },
+      { value: 'otra', label: 'Otra' },
+    ],
+  },
+  {
     id: 'monto_final',
-    label: 'Monto final acordado',
+    label: 'Monto final',
     type: 'number',
     required: true,
     placeholder: '0.00',
   },
   {
     id: 'numero_orden',
-    label: 'Número de ofertas / orden o contrato',
+    label: 'Nº de oferta o contrato',
     type: 'text',
-    placeholder: 'Referencia de ofertas u orden contrato',
+    placeholder: 'Referencia',
+  },
+  {
+    id: 'meses_contrato_cerrado',
+    label: 'Meses de contrato (si ganó)',
+    type: 'select',
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: '12', label: '12' },
+      { value: '18', label: '18' },
+      { value: '24', label: '24' },
+      { value: '34', label: '34' },
+      { value: 'na', label: 'No aplica' },
+    ],
   },
   {
     id: 'razon_cierre',
-    label: 'Razón de cierre',
+    label: 'Comentario (por qué ganó, perdió o pausa)',
     type: 'textarea',
     required: true,
-    placeholder: 'Si perdido: precio, competencia, timing… Si ganado: factores de éxito',
+    placeholder: 'Breve resumen',
   },
 ];
 
@@ -398,6 +557,53 @@ export function getFieldsForStage(stageId: StageId): StageField[] {
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function isCondVisible(stageData: Record<string, string>, showWhen?: StageField['showWhen']): boolean {
+  if (!showWhen) return true;
+  const v = stageData[showWhen.field] ?? '';
+  return showWhen.values.includes(v);
+}
+
+const conditionalListenersBound = new WeakSet<HTMLElement>();
+
+function refreshConditionalVisibility(
+  container: HTMLElement,
+  opts: { clearHidden?: boolean } = {},
+): void {
+  const clearHidden = opts.clearHidden ?? true;
+  for (const wrap of container.querySelectorAll<HTMLElement>('.stage-cond-wrap')) {
+    const master = wrap.dataset.condMaster;
+    const raw = wrap.dataset.condValues ?? '';
+    const allowed = raw.split(',').filter(Boolean);
+    if (!master) continue;
+    const ctrl = document.getElementById(`stage-q-${master}`) as HTMLSelectElement | null;
+    const v = ctrl?.value ?? '';
+    const show = allowed.includes(v);
+    wrap.classList.toggle('hidden', !show);
+    if (!show && clearHidden) {
+      const innerInput = wrap.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        'input, textarea, select',
+      );
+      if (
+        innerInput &&
+        innerInput.type !== 'checkbox' &&
+        !innerInput.disabled &&
+        !(innerInput instanceof HTMLSelectElement) &&
+        !(innerInput as HTMLInputElement | HTMLTextAreaElement).readOnly
+      ) {
+        innerInput.value = '';
+      }
+    }
+  }
+}
+
+function bindConditionalVisibility(container: HTMLElement): void {
+  if (conditionalListenersBound.has(container)) return;
+  conditionalListenersBound.add(container);
+  container.addEventListener('change', () => {
+    refreshConditionalVisibility(container, { clearHidden: true });
+  });
 }
 
 function renderField(f: StageField, value: string, readOnly: boolean): string {
@@ -456,7 +662,25 @@ export function renderStageQuestions(
     return [];
   }
 
-  container.innerHTML = fields.map((f) => renderField(f, stageData[f.id] ?? '', readOnly)).join('');
+  container.innerHTML = fields
+    .map((f) => {
+      let val = stageData[f.id] ?? '';
+      if (f.type === 'date' && val === '' && !readOnly) {
+        val = todayIsoDate();
+      }
+      const inner = renderField(f, val, readOnly);
+      if (!f.showWhen) return inner;
+      const vis = isCondVisible(stageData, f.showWhen);
+      const wrapClass = vis ? 'stage-cond-wrap' : 'stage-cond-wrap hidden';
+      const valuesAttr = escHtml(f.showWhen.values.join(','));
+      const masterAttr = escHtml(f.showWhen.field);
+      return `<div class="${wrapClass}" data-cond-master="${masterAttr}" data-cond-values="${valuesAttr}">${inner}</div>`;
+    })
+    .join('');
+  if (!readOnly) {
+    bindConditionalVisibility(container);
+  }
+  refreshConditionalVisibility(container, { clearHidden: !readOnly });
   return fields.map((f) => `stage-q-${f.id}`);
 }
 
@@ -471,6 +695,13 @@ export function readStageQuestionValues(stageId: StageId): Record<string, string
       data[f.id] = (el as HTMLInputElement).checked ? 'true' : 'false';
     } else {
       data[f.id] = (el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value;
+    }
+  }
+  for (const f of fields) {
+    if (!f.showWhen) continue;
+    const parent = data[f.showWhen.field] ?? '';
+    if (!f.showWhen.values.includes(parent)) {
+      data[f.id] = '';
     }
   }
   return data;

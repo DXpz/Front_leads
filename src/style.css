@@ -28,6 +28,14 @@
     font-size: 1rem;
     line-height: 1.5rem;
   }
+
+  .opp-identification-grid .opp-id-control {
+    min-height: 2.125rem;
+    height: 2.125rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
 }
 
 @media (max-width: 639.98px) {
@@ -67,6 +75,24 @@
   .input-industrial:focus {
     border-color: theme('colors.brand.navy');
     box-shadow: 0 0 0 2px rgb(20 84 120 / 0.25);
+  }
+
+  /** Fila densa (p. ej. identificación de oportunidad en una sola línea). */
+  .input-industrial-compact {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+  }
+
+  /** Identificación oportunidad: controles misma altura (columnas: grid-cols-5 en HTML). */
+  .opp-identification-grid .opp-id-control {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.125rem;
+    height: 2.125rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
   }
 
   .input-industrial-highlight {

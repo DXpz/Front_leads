@@ -94,10 +94,10 @@
         </div>
         <div class="space-y-4 p-5 sm:p-7">
           <p class="text-sm font-medium leading-relaxed text-ink-800">
-            Escribe el <strong>identificador del cliente</strong> que te indica el sistema (es el mismo dato con el que trabajaremos en el registro).
+            Escribe el <strong>identificador del lead</strong> que te indica el sistema (es el mismo dato con el que trabajaremos en el registro).
           </p>
           <label class="block max-w-md">
-            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">ID del cliente</span>
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">ID del lead</span>
             <input
               type="text"
               id="gate-client-id"
@@ -141,7 +141,7 @@
             id="btn-change-client-id"
             class="hidden min-h-[44px] w-full rounded-sm border-2 border-white/40 bg-brand-navy px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-white shadow-card transition hover:bg-white/10 sm:min-h-0 sm:w-auto"
           >
-            Cambiar cliente
+            Cambiar lead
           </button>
           <button
             type="button"
@@ -209,47 +209,76 @@
           <!-- Identificación de la oportunidad (siempre visible) -->
           <div class="form-well">
             <h3 class="border-b-2 border-brand-navy pb-2 text-xs font-extrabold uppercase tracking-widest text-brand-navy">Identificación de la oportunidad</h3>
-            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="-mx-1 overflow-x-auto pb-0.5 sm:mx-0">
+              <div
+                class="opp-identification-grid grid min-w-0 w-full grid-cols-5 gap-x-2 gap-y-1 sm:gap-x-2.5"
+              >
+                <label
+                  class="col-start-1 row-start-1 mb-0 self-center text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
+                  for="opportunity-number"
+                  >Nº oportunidad</label>
+                <label
+                  class="col-start-2 row-start-1 mb-0 self-center text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
+                  for="document-status"
+                  >Estado</label>
+                <label
+                  class="col-start-3 row-start-1 mb-0 self-center text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
+                  for="opportunity-start-date"
+                  >Fecha inicio</label>
+                <label
+                  class="col-start-4 row-start-1 mb-0 self-center text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
+                  for="opportunity-closing-date"
+                  >Fecha cierre</label>
+                <div class="col-start-5 row-start-1 flex min-w-0 items-center justify-between gap-1.5">
+                  <label
+                    class="mb-0 min-w-0 text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
+                    for="open-activities-count"
+                    >Actividades</label>
+                  <button
+                    type="button"
+                    id="btn-open-activities"
+                    class="shrink-0 rounded-sm border border-ink-300 bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wider text-ink-700 hover:bg-brand-surface sm:tracking-widest"
+                  >
+                    Agenda
+                  </button>
+                </div>
 
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700"
-                  >Nº oportunidad</span
-                >
                 <input
                   type="text"
                   id="opportunity-number"
-                  class="input-industrial"
-                  placeholder="El mismo que en el paso 1"
-                  title="Debe ser el mismo identificador que escribiste al identificar la oportunidad."
+                  class="opp-id-control col-start-1 row-start-2 min-w-0 self-end input-industrial input-industrial-compact"
+                  placeholder="Paso 1"
+                  title="Debe ser el mismo ID del lead que escribiste en el paso 1."
                 />
-              </label>
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Estado</span>
-                <select id="document-status" class="input-industrial">
+                <select id="document-status" class="opp-id-control col-start-2 row-start-2 min-w-0 self-end input-industrial input-industrial-compact">
                   <option value="abierto">Abierto</option>
+                  <option value="cierre">Cierre</option>
                   <option value="cerrado_ganado">Cerrado ganado</option>
                   <option value="cerrado_perdido">Cerrado perdido</option>
                   <option value="pausa">En pausa</option>
                 </select>
-              </label>
-            </div>
-            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de inicio</span>
-                <input type="date" id="opportunity-start-date" required class="input-industrial bg-brand-surface" />
-              </label>
-              <label class="block">
-                <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Fecha de cierre</span>
-                <input type="date" id="opportunity-closing-date" class="input-industrial bg-brand-surface" />
-              </label>
-
-              <label class="block">
-                <div class="mb-1.5 flex items-center justify-between gap-3">
-                  <span class="block text-xs font-bold uppercase tracking-wide text-ink-700">Actividades</span>
-                  <button type="button" id="btn-open-activities" class="rounded-sm border border-ink-300 bg-white px-2 py-1 text-[10px] font-extrabold uppercase tracking-widest text-ink-700 hover:bg-brand-surface">Agenda</button>
-                </div>
-                <input type="number" id="open-activities-count" min="0" step="1" class="input-industrial" placeholder="0" readonly />
-              </label>
+                <input
+                  type="date"
+                  id="opportunity-start-date"
+                  required
+                  class="opp-id-control col-start-3 row-start-2 min-w-0 self-end input-industrial input-industrial-compact bg-brand-surface"
+                />
+                <input
+                  type="date"
+                  id="opportunity-closing-date"
+                  class="opp-id-control col-start-4 row-start-2 min-w-0 self-end input-industrial input-industrial-compact bg-brand-surface"
+                />
+                <input
+                  type="number"
+                  id="open-activities-count"
+                  min="0"
+                  step="1"
+                  class="opp-id-control col-start-5 row-start-2 min-w-0 self-end input-industrial input-industrial-compact"
+                  placeholder="0"
+                  readonly
+                  title="Actividades abiertas"
+                />
+              </div>
             </div>
             <!-- Campos ocultos que se necesitan internamente -->
             <input type="hidden" id="closing-percent" name="closingPercent" value="0" />
@@ -377,7 +406,7 @@
               type="search"
               id="history-opportunity-search"
               class="input-industrial min-w-0 flex-1 sm:max-w-xs"
-              placeholder="Mismo ID del cliente / nº oportunidad"
+              placeholder="Mismo ID del lead / nº oportunidad"
               autocomplete="off"
               enterkeyhint="search"
               title="Se actualiza al abrir una oportunidad; aquí puedes filtrar si lo necesitas."

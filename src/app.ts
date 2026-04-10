@@ -271,7 +271,7 @@ async function applyClientIdAndOpenWorkspace(
   try {
     const id = rawId.trim();
     if (!id) {
-      els.gateHint.textContent = 'Escribe el ID del cliente para continuar.';
+      els.gateHint.textContent = 'Escribe el ID del lead para continuar.';
       return state;
     }
     els.gateHint.textContent = '';
@@ -740,6 +740,7 @@ function fullRender(els: Elements, state: AppState): void {
   updateStagePanel(els, state, ro);
   renderCurrentStageQuestions(els, state, ro);
   applyStageViewLock(els, state);
+  syncDocumentStatusWithCurrentStage(els, state);
   void paintHistoryTable(els, state);
 }
 
@@ -763,6 +764,33 @@ function ensureDefaultDates(els: Elements): void {
   if (!els.form.opportunityStartDate.value) {
     els.form.opportunityStartDate.value = todayIsoDate();
   }
+  if (!els.form.opportunityClosingDate.value) {
+    els.form.opportunityClosingDate.value = todayIsoDate();
+  }
+}
+
+/** Alinea Estado con la etapa Cierre (y revierte "Cierre" al salir de esa etapa). */
+function syncDocumentStatusWithCurrentStage(els: Elements, state: AppState): void {
+  const stage = STAGES[state.currentStageIndex];
+  if (!stage) return;
+  const sel = els.form.documentStatus;
+  const cur = sel.value;
+  if (stage.id === 'cierre') {
+    if (cur !== 'cerrado_ganado' && cur !== 'cerrado_perdido' && cur !== 'pausa') {
+      sel.value = 'cierre';
+    }
+    return;
+  }
+  if (cur === 'cierre') {
+    sel.value = 'abierto';
+  }
+}
+
+function mapResultadoCierreToDocumentStatus(resultado: string): string | null {
+  if (resultado === 'ganado') return 'cerrado_ganado';
+  if (resultado === 'perdido') return 'cerrado_perdido';
+  if (resultado === 'en_pausa') return 'pausa';
+  return null;
 }
 
 export async function mountApp(): Promise<void> {
@@ -789,7 +817,7 @@ export async function mountApp(): Promise<void> {
     els.gateHint.textContent = '';
 
     if (!clientId) {
-      els.gateError.textContent = 'Por favor, escribe un ID de cliente.';
+      els.gateError.textContent = 'Por favor, escribe un ID de lead.';
       els.gateError.style.display = 'block';
       els.gateClientId.classList.add('shake-animation', 'input-error');
       els.gateClientId.focus();
@@ -806,7 +834,7 @@ export async function mountApp(): Promise<void> {
     if (clientExists) {
       // Success state
       els.gateClientId.classList.add('input-success');
-      els.gateHint.textContent = 'Cliente encontrado. Abriendo formulario...';
+      els.gateHint.textContent = 'Lead encontrado. Abriendo formulario...';
 
       // Wait a bit so the user can see the success message
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -825,7 +853,7 @@ export async function mountApp(): Promise<void> {
       els.gateContinue.textContent = 'Continuar al formulario';
       els.gateClientId.disabled = false;
 
-      els.gateError.textContent = 'El cliente no existe. Por favor, verifica el ID.';
+      els.gateError.textContent = 'No hay un lead con ese ID. Verifica el dato.';
       els.gateError.style.display = 'block';
       els.gateClientId.classList.add('shake-animation', 'input-error');
       els.gateClientId.focus();
@@ -844,7 +872,7 @@ export async function mountApp(): Promise<void> {
     els.gateClientId.value = prev;
     els.gateHint.textContent = prev
       ? 'Puedes confirmar el mismo identificador o escribir otro. Pulsa Continuar.'
-      : 'Escribe el identificador del cliente.';
+      : 'Escribe el identificador del lead.';
     void els.gateClientId.focus();
   });
 
@@ -1089,7 +1117,14 @@ export async function mountApp(): Promise<void> {
     const currentStageData = readStageQuestionValues(stage.id);
     // Actualiza cache local para que al cambiar etapa se vean los datos.
     loadedStageDataCache[stage.id] = currentStageData;
-    const snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
+    let snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
+    if (stage.id === 'cierre') {
+      const mapped = mapResultadoCierreToDocumentStatus(currentStageData.resultado_cierre ?? '');
+      if (mapped) {
+        snapshot = { ...snapshot, documentStatus: mapped };
+        els.form.documentStatus.value = mapped;
+      }
+    }
 
     const entry: StageEntry = {
       id: crypto.randomUUID(),
