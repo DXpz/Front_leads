@@ -20,6 +20,17 @@ import { renderStageQuestions, readStageQuestionValues } from './stageQuestions'
 
 const SESSION_CLIENT_KEY = 'lead-session-client-id';
 
+/** Prefijo del ID de lead en numeración local y convención (no usar solo «L»). */
+const LEAD_ID_PREFIX = 'LD';
+
+/** Normaliza mayúsculas y el patrón legado `L` + solo dígitos → `LD` + dígitos. */
+function normalizeLeadIdInput(raw: string): string {
+  const t = raw.trim().toUpperCase();
+  const m = /^L(\d+)$/.exec(t);
+  if (m) return `${LEAD_ID_PREFIX}${m[1]}`;
+  return t;
+}
+
 /** La API local no expone POST /api/logs; se deja el hook por si se añade telemetría más adelante. */
 function logEvent(_payload: {
   opportunityNumber?: string;
@@ -269,7 +280,7 @@ async function applyClientIdAndOpenWorkspace(
   rawId: string,
 ): Promise<AppState> {
   try {
-    const id = rawId.trim();
+    const id = normalizeLeadIdInput(rawId);
     if (!id) {
       els.gateHint.textContent = 'Escribe el ID del lead para continuar.';
       return state;
@@ -523,7 +534,7 @@ async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
   try {
     const n = nextLocalOpportunityNumber();
     if (!els.form.opportunityNumber.value.trim()) {
-      els.form.opportunityNumber.value = n;
+      els.form.opportunityNumber.value = `${LEAD_ID_PREFIX}${n}`;
     }
   } finally {
     opportunityAutoNumberInFlight = false;
@@ -809,7 +820,8 @@ export async function mountApp(): Promise<void> {
   requestAnimationFrame(() => els.gateClientId.focus());
 
   els.gateContinue.addEventListener('click', async () => {
-    const clientId = els.gateClientId.value.trim();
+    const clientId = normalizeLeadIdInput(els.gateClientId.value);
+    els.gateClientId.value = clientId;
 
     // Reset states
     els.gateError.style.display = 'none';
@@ -867,7 +879,7 @@ export async function mountApp(): Promise<void> {
   });
   els.btnChangeClientId.addEventListener('click', () => {
     sessionStorage.removeItem(SESSION_CLIENT_KEY);
-    const prev = els.form.opportunityNumber.value.trim();
+    const prev = normalizeLeadIdInput(els.form.opportunityNumber.value);
     setGateVisibility(els, true);
     els.gateClientId.value = prev;
     els.gateHint.textContent = prev
@@ -877,7 +889,7 @@ export async function mountApp(): Promise<void> {
   });
 
   els.gateClientId.addEventListener('input', () => {
-    els.gateClientId.value = els.gateClientId.value.toUpperCase();
+    els.gateClientId.value = normalizeLeadIdInput(els.gateClientId.value);
   });
 
   // Observaciones siempre debajo de Cliente (columna izquierda) para evitar huecos.
@@ -923,6 +935,11 @@ export async function mountApp(): Promise<void> {
   };
 
   els.form.opportunityNumber.addEventListener('change', doOpportunityLookup);
+
+  els.form.opportunityNumber.addEventListener('input', () => {
+    const next = normalizeLeadIdInput(els.form.opportunityNumber.value);
+    if (next !== els.form.opportunityNumber.value) els.form.opportunityNumber.value = next;
+  });
 
   // Autonumeración: al escribir el nombre de oportunidad o al salir del campo,
   // si no hay número, pide uno a PostgreSQL.
