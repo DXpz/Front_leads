@@ -20,15 +20,30 @@ import { renderStageQuestions, readStageQuestionValues } from './stageQuestions'
 
 const SESSION_CLIENT_KEY = 'lead-session-client-id';
 
-/** Prefijo del ID de lead en numeración local y convención (no usar solo «L»). */
+/** Prefijo del ID de lead: siempre `LD` + exactamente 3 dígitos (ej. LD042). */
 const LEAD_ID_PREFIX = 'LD';
 
-/** Normaliza mayúsculas y el patrón legado `L` + solo dígitos → `LD` + dígitos. */
+const LEAD_ID_PATTERN = /^LD\d{3}$/;
+
+function formatLeadThreeDigits(digitStr: string): string {
+  const d = digitStr.replace(/\D/g, '');
+  if (d.length === 0) return '000';
+  if (d.length <= 3) return d.padStart(3, '0');
+  return d.slice(0, 3);
+}
+
+/** Convierte entradas tipo L12 / LD1 / LD1234 al formato LD + 3 dígitos. Resto sin cambios. */
 function normalizeLeadIdInput(raw: string): string {
   const t = raw.trim().toUpperCase();
-  const m = /^L(\d+)$/.exec(t);
-  if (m) return `${LEAD_ID_PREFIX}${m[1]}`;
+  let m = /^L(\d+)$/.exec(t);
+  if (m) return `${LEAD_ID_PREFIX}${formatLeadThreeDigits(m[1])}`;
+  m = /^LD(\d+)$/.exec(t);
+  if (m) return `${LEAD_ID_PREFIX}${formatLeadThreeDigits(m[1])}`;
   return t;
+}
+
+function isValidLeadIdFormat(id: string): boolean {
+  return LEAD_ID_PATTERN.test(id.trim().toUpperCase());
 }
 
 /** La API local no expone POST /api/logs; se deja el hook por si se añade telemetría más adelante. */
@@ -285,6 +300,10 @@ async function applyClientIdAndOpenWorkspace(
       els.gateHint.textContent = 'Escribe el ID del lead para continuar.';
       return state;
     }
+    if (!isValidLeadIdFormat(id)) {
+      els.gateHint.textContent = 'El ID del lead debe ser LD y 3 números (ej. LD042).';
+      return state;
+    }
     els.gateHint.textContent = '';
     sessionStorage.setItem(SESSION_CLIENT_KEY, id);
     els.gateClientId.value = id;
@@ -522,7 +541,8 @@ function nextLocalOpportunityNumber(): string {
   if (!Number.isFinite(n) || n < 0) n = 0;
   n += 1;
   localStorage.setItem(OPP_SEQ_KEY, String(n));
-  return String(n);
+  const mod = ((n - 1) % 999) + 1;
+  return `${LEAD_ID_PREFIX}${String(mod).padStart(3, '0')}`;
 }
 
 async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
@@ -532,9 +552,9 @@ async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
   if (!els.form.clientName.value.trim()) return;
   opportunityAutoNumberInFlight = true;
   try {
-    const n = nextLocalOpportunityNumber();
+    const id = nextLocalOpportunityNumber();
     if (!els.form.opportunityNumber.value.trim()) {
-      els.form.opportunityNumber.value = `${LEAD_ID_PREFIX}${n}`;
+      els.form.opportunityNumber.value = id;
     }
   } finally {
     opportunityAutoNumberInFlight = false;
@@ -830,6 +850,14 @@ export async function mountApp(): Promise<void> {
 
     if (!clientId) {
       els.gateError.textContent = 'Por favor, escribe un ID de lead.';
+      els.gateError.style.display = 'block';
+      els.gateClientId.classList.add('shake-animation', 'input-error');
+      els.gateClientId.focus();
+      return;
+    }
+
+    if (!isValidLeadIdFormat(clientId)) {
+      els.gateError.textContent = 'El ID del lead debe ser LD y 3 números (ej. LD042).';
       els.gateError.style.display = 'block';
       els.gateClientId.classList.add('shake-animation', 'input-error');
       els.gateClientId.focus();

@@ -93,16 +93,13 @@
           </h2>
         </div>
         <div class="space-y-4 p-5 sm:p-7">
-          <p class="text-sm font-medium leading-relaxed text-ink-800">
-            Escribe el <strong>identificador del lead</strong> que te indica el sistema (es el mismo dato con el que trabajaremos en el registro).
-          </p>
           <label class="block max-w-md">
             <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">ID del lead</span>
             <input
               type="text"
               id="gate-client-id"
               class="input-industrial"
-              placeholder="Ej. LD12345 o el código que uses"
+              placeholder="Ej. LD123"
               autocomplete="off"
               enterkeyhint="go"
             />
@@ -247,8 +244,7 @@
                   type="text"
                   id="opportunity-number"
                   class="opp-id-control col-start-1 row-start-2 min-w-0 self-end input-industrial input-industrial-compact"
-                  placeholder="Ej. LD… (mismo paso 1)"
-                  title="Debe ser el mismo ID del lead que escribiste en el paso 1."
+                  placeholder="Ej. LD123"
                 />
                 <select id="document-status" class="opp-id-control col-start-2 row-start-2 min-w-0 self-end input-industrial input-industrial-compact">
                   <option value="abierto">Abierto</option>
@@ -406,7 +402,7 @@
               type="search"
               id="history-opportunity-search"
               class="input-industrial min-w-0 flex-1 sm:max-w-xs"
-              placeholder="Mismo ID del lead (p. ej. LD…) / nº oportunidad"
+              placeholder="Ej. LD123"
               autocomplete="off"
               enterkeyhint="search"
               title="Se actualiza al abrir una oportunidad; aquí puedes filtrar si lo necesitas."
