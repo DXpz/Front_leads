@@ -20,25 +20,22 @@ import { renderStageQuestions, readStageQuestionValues } from './stageQuestions'
 
 const SESSION_CLIENT_KEY = 'lead-session-client-id';
 
-/** Prefijo del ID de lead: siempre `LD` + exactamente 3 dígitos (ej. LD042). */
+/** Prefijo del ID de lead: `LD` + uno o más dígitos (ej. LD42, LD1234). */
 const LEAD_ID_PREFIX = 'LD';
 
-const LEAD_ID_PATTERN = /^LD\d{3}$/;
+const LEAD_ID_PATTERN = /^LD\d+$/;
 
-function formatLeadThreeDigits(digitStr: string): string {
-  const d = digitStr.replace(/\D/g, '');
-  if (d.length === 0) return '000';
-  if (d.length <= 3) return d.padStart(3, '0');
-  return d.slice(0, 3);
+function leadDigitsOnly(s: string): string {
+  return s.replace(/\D/g, '');
 }
 
-/** Convierte entradas tipo L12 / LD1 / LD1234 al formato LD + 3 dígitos. Resto sin cambios. */
+/** Convierte `L` + dígitos o `LD` + dígitos al formato LD + números. Resto sin cambios. */
 function normalizeLeadIdInput(raw: string): string {
   const t = raw.trim().toUpperCase();
   let m = /^L(\d+)$/.exec(t);
-  if (m) return `${LEAD_ID_PREFIX}${formatLeadThreeDigits(m[1])}`;
+  if (m) return `${LEAD_ID_PREFIX}${leadDigitsOnly(m[1])}`;
   m = /^LD(\d+)$/.exec(t);
-  if (m) return `${LEAD_ID_PREFIX}${formatLeadThreeDigits(m[1])}`;
+  if (m) return `${LEAD_ID_PREFIX}${leadDigitsOnly(m[1])}`;
   return t;
 }
 
@@ -301,7 +298,7 @@ async function applyClientIdAndOpenWorkspace(
       return state;
     }
     if (!isValidLeadIdFormat(id)) {
-      els.gateHint.textContent = 'El ID del lead debe ser LD y 3 números (ej. LD042).';
+      els.gateHint.textContent = 'El ID del lead debe ser LD seguido de números (ej. LD123).';
       return state;
     }
     els.gateHint.textContent = '';
@@ -541,8 +538,7 @@ function nextLocalOpportunityNumber(): string {
   if (!Number.isFinite(n) || n < 0) n = 0;
   n += 1;
   localStorage.setItem(OPP_SEQ_KEY, String(n));
-  const mod = ((n - 1) % 999) + 1;
-  return `${LEAD_ID_PREFIX}${String(mod).padStart(3, '0')}`;
+  return `${LEAD_ID_PREFIX}${n}`;
 }
 
 async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
@@ -857,7 +853,7 @@ export async function mountApp(): Promise<void> {
     }
 
     if (!isValidLeadIdFormat(clientId)) {
-      els.gateError.textContent = 'El ID del lead debe ser LD y 3 números (ej. LD042).';
+      els.gateError.textContent = 'El ID del lead debe ser LD seguido de números (ej. LD123).';
       els.gateError.style.display = 'block';
       els.gateClientId.classList.add('shake-animation', 'input-error');
       els.gateClientId.focus();
@@ -916,8 +912,14 @@ export async function mountApp(): Promise<void> {
     void els.gateClientId.focus();
   });
 
+  /** Solo mayúsculas al escribir; normalizar prefijo LD al salir o al pulsar Continuar. */
   els.gateClientId.addEventListener('input', () => {
-    els.gateClientId.value = normalizeLeadIdInput(els.gateClientId.value);
+    els.gateClientId.value = els.gateClientId.value.toUpperCase();
+  });
+  els.gateClientId.addEventListener('blur', () => {
+    const v = els.gateClientId.value.trim();
+    if (!v) return;
+    els.gateClientId.value = normalizeLeadIdInput(v);
   });
 
   // Observaciones siempre debajo de Cliente (columna izquierda) para evitar huecos.
@@ -965,7 +967,13 @@ export async function mountApp(): Promise<void> {
   els.form.opportunityNumber.addEventListener('change', doOpportunityLookup);
 
   els.form.opportunityNumber.addEventListener('input', () => {
-    const next = normalizeLeadIdInput(els.form.opportunityNumber.value);
+    els.form.opportunityNumber.value = els.form.opportunityNumber.value.toUpperCase();
+  });
+
+  els.form.opportunityNumber.addEventListener('blur', () => {
+    const v = els.form.opportunityNumber.value.trim();
+    if (!v) return;
+    const next = normalizeLeadIdInput(v);
     if (next !== els.form.opportunityNumber.value) els.form.opportunityNumber.value = next;
   });
 
