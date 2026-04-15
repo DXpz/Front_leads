@@ -522,6 +522,18 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   loadedStageDataCache = await loadAllStageData(key);
   mergeLoadedCacheFromStateHistory(state, key);
 
+  // Guardar los valores llenados por la API antes de que writeOpportunityForm
+  // pueda sobreescribirlos con un snapshot local que puede tener datos vacíos
+  // (guardado cuando los 304 impedían el autocompletado correcto).
+  const apiFilledClientName = els.form.clientName.value;
+  const apiFilledClientEmail = els.form.clientEmail.value;
+  const apiFilledClientPhone = els.form.clientPhone.value;
+  const apiFilledSellerName = els.form.sellerName.value;
+  const apiFilledTerritory = els.form.territory.value;
+  const apiFilledNotes = els.form.notes.value;
+  const apiFilledStartDate = els.form.opportunityStartDate.value;
+  const apiFilledClosingDate = els.form.opportunityClosingDate.value;
+
   if (crmOpportunityStageIndexFromApi >= 0) {
     const tIdx = crmOpportunityStageIndexFromApi;
     const snap = latestSnapshotForStageIndex(state.history, key, tIdx);
@@ -540,6 +552,16 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
       state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[cur.id] ?? {} } };
     }
   }
+
+  // Restaurar los datos que vienen de la API: tienen prioridad sobre el snapshot local.
+  if (apiFilledClientName) els.form.clientName.value = apiFilledClientName;
+  if (apiFilledClientEmail) els.form.clientEmail.value = apiFilledClientEmail;
+  if (apiFilledClientPhone) els.form.clientPhone.value = apiFilledClientPhone;
+  if (apiFilledSellerName) els.form.sellerName.value = apiFilledSellerName;
+  if (apiFilledTerritory) els.form.territory.value = apiFilledTerritory;
+  if (apiFilledNotes) els.form.notes.value = apiFilledNotes;
+  if (apiFilledStartDate) els.form.opportunityStartDate.value = apiFilledStartDate;
+  if (apiFilledClosingDate) els.form.opportunityClosingDate.value = apiFilledClosingDate;
 
   return state;
 }
