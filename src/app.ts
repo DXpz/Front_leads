@@ -427,16 +427,18 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
       else if (stn === 5) crmOpportunityStageIndexFromApi = 3;
       else crmOpportunityStageIndexFromApi = 4;
     }
-    els.form.clientName.value = String(a.client_name ?? '');
-    els.form.clientEmail.value = String(a.client_email ?? '');
-    els.form.clientPhone.value = String(a.client_phone ?? '');
-    els.form.sellerName.value = String(a.advisor_name ?? '');
+    // Campos que /api/opportunity puede haber llenado: solo rellenar si están vacíos
+    fillIfEmpty(els.form.clientName, String(a.client_name ?? ''));
+    fillIfEmpty(els.form.clientEmail, String(a.client_email ?? ''));
+    fillIfEmpty(els.form.clientPhone, String(a.client_phone ?? ''));
+    fillIfEmpty(els.form.sellerName, String(a.advisor_name ?? ''));
+    // Campos exclusivos de la auditoría: asignar siempre si hay valor
     const st = isoDatetimeToDateInputValue(a.start_time as string | undefined);
     const en = isoDatetimeToDateInputValue(a.end_time as string | undefined);
     if (st) els.form.opportunityStartDate.value = st;
     if (en) els.form.opportunityClosingDate.value = en;
-    els.form.territory.value = String(a.country ?? '');
-    els.form.notes.value = String(a.description ?? '');
+    if (a.country) els.form.territory.value = String(a.country);
+    if (a.description) els.form.notes.value = String(a.description);
     if (a.id != null && String(a.id).trim() !== '') {
       els.form.relatedDocNumber.value = String(a.id);
     }
