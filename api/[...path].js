@@ -45,10 +45,24 @@ export default async function handler(req, res) {
 
   try {
     const upstream = await fetch(target, { method, headers: upstreamHeaders, body });
+
+    // Cabeceras de caché que NO deben propagarse al cliente para evitar 304 en el proxy
+    const STRIP_HEADERS = ['etag', 'last-modified', 'cache-control', 'expires', 'pragma'];
+
     const outType = upstream.headers.get('content-type');
     if (outType) res.setHeader('Content-Type', outType);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+    upstream.headers.forEach((value, key) => {
+      if (!STRIP_HEADERS.includes(key.toLowerCase())) {
+        try { res.setHeader(key, value); } catch (_) {}
+      }
+    });
+
+    // Si el upstream devuelve 304 el proxy no tiene body; devolvemos 200 vacío
+    const statusCode = upstream.status === 304 ? 200 : upstream.status;
     const buffer = Buffer.from(await upstream.arrayBuffer());
-    res.status(upstream.status).send(buffer);
+    res.status(statusCode).send(buffer);
   } catch (err) {
     console.error('[proxy] Error al contactar upstream:', target, err);
     res.status(502).json({
