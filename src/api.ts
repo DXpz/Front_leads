@@ -29,6 +29,7 @@ export function apiFetch(path: string, options?: RequestInit): Promise<Response>
   return fetch(url, {
     ...options,
     headers,
+    cache: 'no-store',
   });
 }
 
