@@ -360,6 +360,17 @@ function fillIfEmpty(input: HTMLInputElement | HTMLTextAreaElement, value: strin
   input.value = value;
 }
 
+/** Limpia campos autocompletados por lookup para no arrastrar datos de otro lead. */
+function clearLookupAutofillFields(els: Elements): void {
+  els.form.clientName.value = '';
+  els.form.clientEmail.value = '';
+  els.form.clientPhone.value = '';
+  els.form.sellerName.value = '';
+  els.form.territory.value = '';
+  els.form.notes.value = '';
+  els.form.relatedDocNumber.value = '';
+}
+
 /** Nombres de asesor conocidos en `audits` (documentado: GET /api/metrics/lista-asesores). */
 async function refreshSellerNameDatalist(): Promise<void> {
   const dl = document.getElementById('seller-name-list');
@@ -420,7 +431,6 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
     els.form.clientEmail.value = String(a.client_email ?? '');
     els.form.clientPhone.value = String(a.client_phone ?? '');
     els.form.sellerName.value = String(a.advisor_name ?? '');
-    els.form.clientName.value = String(a.subject ?? '');
     const st = isoDatetimeToDateInputValue(a.start_time as string | undefined);
     const en = isoDatetimeToDateInputValue(a.end_time as string | undefined);
     if (st) els.form.opportunityStartDate.value = st;
@@ -489,6 +499,7 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   }
   if (key === opportunityLookupLastKey) return state;
   opportunityLookupLastKey = key;
+  clearLookupAutofillFields(els);
 
   try {
     const r = await apiFetch(`/api/opportunity?number=${encodeURIComponent(key)}`);
