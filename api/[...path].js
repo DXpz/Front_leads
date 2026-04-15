@@ -46,8 +46,15 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(target, { method, headers: upstreamHeaders, body });
 
-    // Cabeceras de caché que NO deben propagarse al cliente para evitar 304 en el proxy
-    const STRIP_HEADERS = ['etag', 'last-modified', 'cache-control', 'expires', 'pragma'];
+    // Cabeceras que NO se deben propagar al cliente:
+    // - caché: evitan 304 en el proxy
+    // - content-encoding/transfer-encoding: Node fetch descomprime automáticamente,
+    //   reenviar content-encoding causaría que el browser intente re-descomprimir datos ya planos
+    // - content-length: el tamaño del buffer ya descomprimido puede diferir del original
+    const STRIP_HEADERS = [
+      'etag', 'last-modified', 'cache-control', 'expires', 'pragma',
+      'content-encoding', 'transfer-encoding', 'content-length',
+    ];
 
     const outType = upstream.headers.get('content-type');
     if (outType) res.setHeader('Content-Type', outType);
