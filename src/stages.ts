@@ -6,6 +6,8 @@ export type StageDefinition = {
   short: string;
   color: string;
   desc: string;
+  /** Si es true, la etapa es automática: siempre solo lectura, el asesor no la edita. */
+  autoOnly?: boolean;
 };
 
 export const STAGES: readonly StageDefinition[] = [
@@ -15,6 +17,7 @@ export const STAGES: readonly StageDefinition[] = [
     short: '1',
     color: 'bg-brand-navy',
     desc: 'Origen y datos iniciales del lead',
+    autoOnly: true,
   },
   {
     id: 'reunion',

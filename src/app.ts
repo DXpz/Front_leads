@@ -109,9 +109,11 @@ function furthestReachedStageIndex(state: AppState): number {
 }
 
 function isCurrentStageEditable(state: AppState): boolean {
+  // Las etapas automáticas (ej. Asignación) nunca son editables por el asesor.
+  const stage = STAGES[state.currentStageIndex];
+  if (stage?.autoOnly) return false;
   const f = furthestReachedStageIndex(state);
   // La etapa actual es editable si es la más lejana alcanzada o si está más allá.
-  // Esto permite avanzar a una nueva etapa y que sea editable inmediatamente.
   return state.currentStageIndex >= f;
 }
 
@@ -547,6 +549,10 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
       state = { ...state, draft: { ...state.draft, stageData: { ...sd } } };
     }
   } else {
+    // La API no informó etapa: mover a Reunión si estamos en Asignación (etapa automática).
+    if (STAGES[state.currentStageIndex]?.autoOnly) {
+      state = { ...state, currentStageIndex: 1 };
+    }
     const cur = STAGES[state.currentStageIndex];
     if (cur && loadedStageDataCache[cur.id]) {
       state = { ...state, draft: { ...state.draft, stageData: loadedStageDataCache[cur.id] ?? {} } };
@@ -691,9 +697,15 @@ function updateStagePanel(els: Elements, state: AppState, readOnly: boolean): vo
   if (!s) return;
   els.stageTitle.textContent = s.label;
   const prog = effectiveProgressIndex(state);
-  els.stageBadge.textContent = readOnly
-    ? `Revisión paso ${state.currentStageIndex + 1} · CRM paso ${prog + 1}`
-    : `Paso ${state.currentStageIndex + 1} de ${STAGE_COUNT} · Avance CRM ${prog + 1}/${STAGE_COUNT}`;
+  let badgeText: string;
+  if (s.autoOnly) {
+    badgeText = `Etapa automática · CRM paso ${prog + 1}`;
+  } else if (readOnly) {
+    badgeText = `Revisión paso ${state.currentStageIndex + 1} · CRM paso ${prog + 1}`;
+  } else {
+    badgeText = `Paso ${state.currentStageIndex + 1} de ${STAGE_COUNT} · Avance CRM ${prog + 1}/${STAGE_COUNT}`;
+  }
+  els.stageBadge.textContent = badgeText;
   els.stageBadge.className = `inline-flex w-fit items-center rounded-sm border-2 border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white ${s.color}`;
 }
 
@@ -769,9 +781,15 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
 function renderCurrentStageQuestions(els: Elements, state: AppState, readOnly: boolean): void {
   const stage = STAGES[state.currentStageIndex];
   if (!stage) return;
-  els.stageQuestionsTitle.textContent = readOnly
-    ? `Preguntas — ${stage.label} (solo lectura)`
-    : `Preguntas — ${stage.label}`;
+  let qTitle: string;
+  if (stage.autoOnly) {
+    qTitle = `${stage.label} — datos automáticos (solo lectura)`;
+  } else if (readOnly) {
+    qTitle = `Preguntas — ${stage.label} (solo lectura)`;
+  } else {
+    qTitle = `Preguntas — ${stage.label}`;
+  }
+  els.stageQuestionsTitle.textContent = qTitle;
   const stageData = state.draft.stageData ?? loadedStageDataCache[stage.id] ?? {};
   renderStageQuestions(els.stageQuestionsContainer, stage.id, stageData, readOnly);
 }
@@ -1140,6 +1158,17 @@ export async function mountApp(): Promise<void> {
     const newStage = STAGES[idx];
     const nextEditable = isCurrentStageEditable(nextState);
 
+    // Guardar los campos de identidad del lead antes de cualquier writeOpportunityForm,
+    // para que la navegación entre etapas nunca corrompa los datos del cliente actual.
+    const savedClientName = els.form.clientName.value;
+    const savedClientEmail = els.form.clientEmail.value;
+    const savedClientPhone = els.form.clientPhone.value;
+    const savedSellerName = els.form.sellerName.value;
+    const savedTerritory = els.form.territory.value;
+    const savedStartDate = els.form.opportunityStartDate.value;
+    const savedClosingDate = els.form.opportunityClosingDate.value;
+    const savedNotes = els.form.notes.value;
+
     if (!nextEditable) {
       const snap = latestSnapshotForStageIndex(nextState.history, opp, idx);
       if (snap) {
@@ -1174,6 +1203,16 @@ export async function mountApp(): Promise<void> {
         writeOpportunityForm(els.form, nextState.draft);
       }
     }
+
+    // Restaurar los campos de identidad del lead: la identidad nunca cambia al navegar etapas.
+    if (savedClientName) els.form.clientName.value = savedClientName;
+    if (savedClientEmail) els.form.clientEmail.value = savedClientEmail;
+    if (savedClientPhone) els.form.clientPhone.value = savedClientPhone;
+    if (savedSellerName) els.form.sellerName.value = savedSellerName;
+    if (savedTerritory) els.form.territory.value = savedTerritory;
+    if (savedStartDate) els.form.opportunityStartDate.value = savedStartDate;
+    if (savedClosingDate) els.form.opportunityClosingDate.value = savedClosingDate;
+    if (savedNotes) els.form.notes.value = savedNotes;
 
     state = nextState;
     saveState(state);
