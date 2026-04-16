@@ -781,10 +781,21 @@ function scheduleHistoryPaint(els: Elements, state: AppState): void {
 function renderCurrentStageQuestions(els: Elements, state: AppState, readOnly: boolean): void {
   const stage = STAGES[state.currentStageIndex];
   if (!stage) return;
-  let qTitle: string;
+
   if (stage.autoOnly) {
-    qTitle = `${stage.label} — datos automáticos (solo lectura)`;
-  } else if (readOnly) {
+    // Etapa automática: ocultar el panel de preguntas y expandir el formulario a una sola columna.
+    els.stageQuestionsPanel.classList.add('hidden');
+    els.leadGrid.style.gridTemplateColumns = '1fr';
+    els.stageQuestionsContainer.innerHTML = '';
+    return;
+  }
+
+  // Etapa normal: mostrar el panel y restaurar el grid de dos columnas.
+  els.stageQuestionsPanel.classList.remove('hidden');
+  els.leadGrid.style.gridTemplateColumns = '';
+
+  let qTitle: string;
+  if (readOnly) {
     qTitle = `Preguntas — ${stage.label} (solo lectura)`;
   } else {
     qTitle = `Preguntas — ${stage.label}`;
@@ -801,7 +812,11 @@ function applyStageViewLock(els: Elements, state: AppState): void {
   els.btnSubmitStage.disabled = ro;
   els.btnReset.disabled = ro;
   els.btnOpenActivities.disabled = ro;
-  els.stageQuestionsPanel.classList.toggle('opacity-95', ro);
+  // Solo aplicar opacidad si el panel está visible (etapas no automáticas).
+  const stage = STAGES[state.currentStageIndex];
+  if (!stage?.autoOnly) {
+    els.stageQuestionsPanel.classList.toggle('opacity-95', ro);
+  }
 }
 
 function fullRender(els: Elements, state: AppState): void {
