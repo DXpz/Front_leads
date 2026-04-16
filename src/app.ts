@@ -306,13 +306,27 @@ async function applyClientIdAndOpenWorkspace(
     els.gateHint.textContent = '';
     sessionStorage.setItem(SESSION_CLIENT_KEY, id);
     els.gateClientId.value = id;
-    mergeLoadedCacheFromStateHistory(state, id);
-    writeOpportunityForm(els.form, state.draft);
+
+    // Construir un estado limpio SOLO con las entradas del historial que pertenecen a este lead.
+    // Esto evita que el historial global del servidor (singleton) bloquee en read-only etapas
+    // de un lead que en realidad aún no las ha completado.
+    const needle = id.trim().toLowerCase();
+    const leadHistory = state.history.filter((e) => {
+      const sn = (e.snapshot.opportunityNumber ?? '').trim().toLowerCase();
+      const sc = (e.snapshot.clientId ?? '').trim().toLowerCase();
+      return sn === needle || sc === needle;
+    });
+    let s: AppState = { draft: {}, history: leadHistory, currentStageIndex: 1 };
+
+    // Limpiar completamente el formulario antes de escribir los datos del nuevo lead.
+    clearLookupAutofillFields(els);
     els.form.opportunityNumber.value = id;
     ensureDefaultDates(els);
     setGateVisibility(els, false);
+
     opportunityLookupLastKey = '';
-    let s = await lookupOpportunityAndFill(els, state);
+    mergeLoadedCacheFromStateHistory(s, id);
+    s = await lookupOpportunityAndFill(els, s);
     s = persistDraft(els, s);
     fullRender(els, s);
     syncHistorySearchWithOpportunity(els, s);
@@ -321,11 +335,10 @@ async function applyClientIdAndOpenWorkspace(
     console.error('ERROR FATAL AL ABRIR EL WORKSPACE:', error);
     els.gateError.textContent = 'Ocurrió un error al cargar el formulario. Revisa la consola.';
     els.gateError.style.display = 'block';
-    // Reset UI to prevent freeze
     els.gateContinue.disabled = false;
     els.gateContinue.textContent = 'Continuar al formulario';
     els.gateClientId.disabled = false;
-    return state; // Devuelve el estado original
+    return state;
   }
 }
 
@@ -362,7 +375,7 @@ function fillIfEmpty(input: HTMLInputElement | HTMLTextAreaElement, value: strin
   input.value = value;
 }
 
-/** Limpia campos autocompletados por lookup para no arrastrar datos de otro lead. */
+/** Limpia TODOS los campos del formulario principal para que no queden datos de otro lead. */
 function clearLookupAutofillFields(els: Elements): void {
   els.form.clientName.value = '';
   els.form.clientEmail.value = '';
@@ -371,6 +384,13 @@ function clearLookupAutofillFields(els: Elements): void {
   els.form.territory.value = '';
   els.form.notes.value = '';
   els.form.relatedDocNumber.value = '';
+  els.form.opportunityStartDate.value = '';
+  els.form.opportunityClosingDate.value = '';
+  els.form.documentStatus.value = 'abierto';
+  els.form.totalInvoiceAmount.value = '';
+  els.form.openActivitiesCount.value = '';
+  els.form.closingPercent.value = '0';
+  updateClosingPercentBar(els.form);
 }
 
 /** Nombres de asesor conocidos en `audits` (documentado: GET /api/metrics/lista-asesores). */
