@@ -88,24 +88,24 @@ function historyMaxStageIndex(history: readonly StageEntry[]): number {
 }
 
 function effectiveProgressIndex(state: AppState): number {
-  if (crmOpportunityStageIndexFromApi >= 0) {
-    return crmOpportunityStageIndexFromApi;
-  }
   const h = historyMaxStageIndex(state.history);
+  const byApi = crmOpportunityStageIndexFromApi;
+  const ds = (state.draft.documentStatus ?? '').trim();
+  const byDocumentStatus = ds === 'cerrado_ganado' || ds === 'cerrado_perdido' || ds === 'pausa' ? 4 : -1;
+  const best = Math.max(h, byApi, byDocumentStatus);
   // Si no hay historial, pero empezamos en la etapa 1, el progreso efectivo es 0 (Asignación completada)
-  if (h < 0 && state.currentStageIndex > 0) {
+  if (best < 0 && state.currentStageIndex > 0) {
     return 0;
   }
-  return Math.max(0, h);
+  return Math.max(0, best);
 }
 
 /** Tope del embudo alcanzado (para saber qué etapa sigue editable). */
 function furthestReachedStageIndex(state: AppState): number {
-  const h = historyMaxStageIndex(state.history);
-  if (crmOpportunityStageIndexFromApi >= 0) {
-    return Math.max(h, crmOpportunityStageIndexFromApi);
-  }
-  return h;
+  // Para edición usamos solo historial local del lead activo.
+  // El `opportunity_stage` de auditoría puede venir adelantado y no debe bloquear
+  // el registro manual de feedback en etapas previas pendientes.
+  return historyMaxStageIndex(state.history);
 }
 
 function isCurrentStageEditable(state: AppState): boolean {
