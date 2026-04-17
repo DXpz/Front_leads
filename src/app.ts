@@ -43,6 +43,16 @@ function isValidLeadIdFormat(id: string): boolean {
   return LEAD_ID_PATTERN.test(id.trim().toUpperCase());
 }
 
+/**
+ * Normaliza la clave estable del lead/oportunidad para requests:
+ * - NFKC para caracteres equivalentes
+ * - elimina espacios (incluidos unicode)
+ * - mayúsculas
+ */
+function normalizeOpportunityKey(raw: string): string {
+  return raw.normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+}
+
 /** La API local no expone POST /api/logs; se deja el hook por si se añade telemetría más adelante. */
 function logEvent(_payload: {
   opportunityNumber?: string;
@@ -368,6 +378,7 @@ let opportunityLookupTimer: ReturnType<typeof setTimeout> | null = null;
 let opportunityLookupLastKey = '';
 let opportunityAutoNumberTimer: ReturnType<typeof setTimeout> | null = null;
 let opportunityAutoNumberInFlight = false;
+let stageSubmitInFlight = false;
 
 function fillIfEmpty(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   if (input.value.trim() !== '') return;
@@ -515,7 +526,10 @@ async function loadAllStageData(oppNumber: string): Promise<Record<string, Recor
 }
 
 async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise<AppState> {
-  const key = els.form.opportunityNumber.value.trim();
+  const key = normalizeOpportunityKey(els.form.opportunityNumber.value);
+  if (key !== els.form.opportunityNumber.value) {
+    els.form.opportunityNumber.value = key;
+  }
   if (!key) {
     opportunityLookupLastKey = '';
     crmOpportunityStageIndexFromApi = -1;
@@ -908,6 +922,59 @@ function mapResultadoCierreToDocumentStatus(resultado: string): string | null {
   return null;
 }
 
+function resolveLeadOrigin(snapshot: OpportunityForm): string {
+  const direct = String(snapshot.stageData?.lead_origen ?? '').trim();
+  if (direct) return direct;
+  const cached = String(loadedStageDataCache.asignacion?.lead_origen ?? '').trim();
+  if (cached) return cached;
+  return 'web';
+}
+
+async function postPrimaryAuditPayload(
+  snapshot: OpportunityForm,
+  stage: { id: StageId; label: string },
+  stageData: Record<string, string>,
+): Promise<void> {
+  const clientId = normalizeOpportunityKey(snapshot.opportunityNumber);
+  if (!clientId) return;
+  const origin = resolveLeadOrigin(snapshot);
+  const payload = {
+    client_id: clientId,
+    opportunityNumber: clientId,
+    validator: origin,
+    origin,
+    stage_id: stage.id,
+    stage_data: stageData,
+    client_name: snapshot.clientName,
+    client_email: snapshot.clientEmail,
+    client_phone: snapshot.clientPhone,
+    advisor_name: snapshot.sellerName,
+    notes: snapshot.notes,
+  };
+
+  // Flujo principal recomendado: assign-round-robin; fallback limpio a /api/audit.
+  try {
+    const r = await apiFetch('/api/audit/assign-round-robin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) return;
+  } catch {
+    /* fallback below */
+  }
+
+  try {
+    void apiFetch('/api/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
 export async function mountApp(): Promise<void> {
   const els = queryElements();
   let state: AppState = await loadState();
@@ -1271,6 +1338,7 @@ export async function mountApp(): Promise<void> {
 
   els.leadForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (stageSubmitInFlight) return;
     if (!isCurrentStageEditable(state)) return;
     if (!els.leadForm.reportValidity()) return;
 
@@ -1280,6 +1348,12 @@ export async function mountApp(): Promise<void> {
     // Actualiza cache local para que al cambiar etapa se vean los datos.
     loadedStageDataCache[stage.id] = currentStageData;
     let snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
+    snapshot = {
+      ...snapshot,
+      opportunityNumber: normalizeOpportunityKey(snapshot.opportunityNumber),
+      clientId: normalizeOpportunityKey(snapshot.opportunityNumber),
+    };
+    els.form.opportunityNumber.value = snapshot.opportunityNumber;
     if (stage.id === 'cierre') {
       const mapped = mapResultadoCierreToDocumentStatus(currentStageData.resultado_cierre ?? '');
       if (mapped) {
@@ -1309,56 +1383,70 @@ export async function mountApp(): Promise<void> {
 
     const advancedToNext = els.advanceNext.checked && state.currentStageIndex > submittedStageIdx;
 
+    stageSubmitInFlight = true;
+    els.btnSubmitStage.disabled = true;
+    els.btnSubmitStage.classList.add('opacity-60', 'cursor-not-allowed');
+
     void (async () => {
-      const synced = await saveStateSynced(state);
-      setSubmitStatus(els, synced ? 'Guardado' : 'Guardado solo en este equipo (revisa la API)');
+      try {
+        const synced = await saveStateSynced(state);
+        setSubmitStatus(els, synced ? 'Guardado' : 'Guardado solo en este equipo (revisa la API)');
 
-      const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
-      logEvent({
-        opportunityNumber: snapshot.opportunityNumber.trim(),
-        eventType: 'stage_submit',
-        stageId: stage.id,
-        sellerName: snapshot.sellerName,
-        clientName: snapshot.clientName,
-        description: `Envió etapa "${stage.label}" — % cierre: ${snapshot.closingPercent}%`,
-        metadata: { closingPercent: snapshot.closingPercent, stageData: currentStageData },
-        durationSeconds: elapsed,
-      });
-
-      if (advancedToNext) {
-        const newStage = STAGES[state.currentStageIndex];
+        const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
         logEvent({
           opportunityNumber: snapshot.opportunityNumber.trim(),
-          eventType: 'stage_advance',
-          fromStage: stage.id,
-          toStage: newStage?.id ?? '',
+          eventType: 'stage_submit',
+          stageId: stage.id,
           sellerName: snapshot.sellerName,
           clientName: snapshot.clientName,
-          description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
+          description: `Envió etapa "${stage.label}" — % cierre: ${snapshot.closingPercent}%`,
+          metadata: { closingPercent: snapshot.closingPercent, stageData: currentStageData },
+          durationSeconds: elapsed,
         });
-        stageEnteredAt = Date.now();
-      }
 
-      if (snapshot.opportunityNumber.trim()) {
-        void apiFetch('/api/opportunity', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        if (advancedToNext) {
+          const newStage = STAGES[state.currentStageIndex];
+          logEvent({
             opportunityNumber: snapshot.opportunityNumber.trim(),
-            clientName: snapshot.clientName,
-            clientEmail: snapshot.clientEmail,
-            clientPhone: snapshot.clientPhone,
+            eventType: 'stage_advance',
+            fromStage: stage.id,
+            toStage: newStage?.id ?? '',
             sellerName: snapshot.sellerName,
-          }),
-        }).catch(() => void 0);
-      }
+            clientName: snapshot.clientName,
+            description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
+          });
+          stageEnteredAt = Date.now();
+        }
 
-      writeOpportunityForm(els.form, state.draft);
-      updateClosingPercentBar(els.form);
-      if (snapshot.opportunityNumber.trim()) {
-        syncHistorySearchWithOpportunity(els, state);
+        if (snapshot.opportunityNumber.trim()) {
+          void postPrimaryAuditPayload(snapshot, stage, currentStageData);
+
+          void apiFetch('/api/opportunity', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              opportunityNumber: normalizeOpportunityKey(snapshot.opportunityNumber),
+              clientId: normalizeOpportunityKey(snapshot.opportunityNumber),
+              validator: resolveLeadOrigin(snapshot),
+              origin: resolveLeadOrigin(snapshot),
+              clientName: snapshot.clientName,
+              clientEmail: snapshot.clientEmail,
+              clientPhone: snapshot.clientPhone,
+              sellerName: snapshot.sellerName,
+            }),
+          }).catch(() => void 0);
+        }
+
+        writeOpportunityForm(els.form, state.draft);
+        updateClosingPercentBar(els.form);
+        if (snapshot.opportunityNumber.trim()) {
+          syncHistorySearchWithOpportunity(els, state);
+        }
+        fullRender(els, state);
+      } finally {
+        stageSubmitInFlight = false;
+        els.btnSubmitStage.classList.remove('opacity-60', 'cursor-not-allowed');
       }
-      fullRender(els, state);
     })();
   });
 
