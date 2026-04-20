@@ -650,7 +650,15 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   }
 
   await fillFromLatestAuditByClientId(els, key);
-  loadedStageDataCache = await loadAllStageData(key);
+  // Guardar datos del audit (fuente de verdad) antes de que loadAllStageData sobreescriba el cache.
+  const auditStageCache = { ...loadedStageDataCache };
+  // Cargar cache del blob /api/state como base de compatibilidad.
+  const stateCache = await loadAllStageData(key);
+  // Combinar: estado del blob como base, datos del audit encima (el audit siempre gana).
+  loadedStageDataCache = { ...stateCache };
+  for (const [sid, auditData] of Object.entries(auditStageCache)) {
+    loadedStageDataCache[sid] = { ...(loadedStageDataCache[sid] ?? {}), ...auditData };
+  }
   mergeLoadedCacheFromStateHistory(state, key);
 
   // Guardar los valores llenados por la API antes de que writeOpportunityForm
