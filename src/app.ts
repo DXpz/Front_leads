@@ -475,6 +475,8 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
     if (a.id != null && String(a.id).trim() !== '') {
       els.form.relatedDocNumber.value = String(a.id);
     }
+    // Poblar cache de etapas con los datos reales guardados en la API.
+    populateStageCacheFromAudit(a);
   } catch {
     crmOpportunityStageIndexFromApi = -1;
   }
@@ -482,6 +484,99 @@ async function fillFromLatestAuditByClientId(els: Elements, clientKey: string): 
 
 /** Cache local de datos de etapa cargados desde BD (por oportunidad). */
 let loadedStageDataCache: Record<string, Record<string, string>> = {};
+
+/**
+ * Mapeo: número de etapa CRM (1-6) → stageId del formulario.
+ * CRM 3 y 4 (construcción/envío propuesta) comparten la UI de Propuesta.
+ */
+const CRM_STAGE_NUM_TO_ID: Record<number, string> = {
+  2: 'reunion',
+  3: 'propuesta',
+  4: 'propuesta',
+  5: 'seguimiento',
+  6: 'cierre',
+};
+
+/**
+ * Lee el objeto `audit` de la API y rellena `loadedStageDataCache` con los datos
+ * reales guardados por etapa, para que al navegar a una etapa pasada se vean los campos.
+ * Fuente primaria: `stage_feedback_json` (contiene los stageData exactos del formulario).
+ * Fallback: reconstruye desde campos específicos de la API (advisor_feedback, propuesta, seguimiento).
+ */
+function populateStageCacheFromAudit(audit: Record<string, unknown>): void {
+  // --- Fuente primaria: stage_feedback_json ---
+  const sfj = audit.stage_feedback_json;
+  if (sfj && typeof sfj === 'object') {
+    for (const [numStr, data] of Object.entries(sfj as Record<string, unknown>)) {
+      const stageId = CRM_STAGE_NUM_TO_ID[Number(numStr)];
+      if (!stageId || !data || typeof data !== 'object') continue;
+      loadedStageDataCache[stageId] = {
+        ...(loadedStageDataCache[stageId] ?? {}),
+        ...(data as Record<string, string>),
+      };
+    }
+  }
+
+  // --- Fallback reunión: advisor_feedback + start_time ---
+  if (!loadedStageDataCache.reunion?.temas_tratados) {
+    const fb = String(audit.advisor_feedback ?? '').trim();
+    const st = isoDatetimeToDateInputValue(audit.start_time as string | undefined);
+    if (fb || st) {
+      loadedStageDataCache.reunion = {
+        ...(loadedStageDataCache.reunion ?? {}),
+        ...(fb ? { temas_tratados: fb } : {}),
+        ...(st ? { fecha_reunion: st } : {}),
+      };
+    }
+  }
+
+  // --- Fallback propuesta: objeto propuesta ---
+  const prop = audit.propuesta;
+  if (prop && typeof prop === 'object' && !loadedStageDataCache.propuesta?.productos_propuestos) {
+    const p = prop as Record<string, unknown>;
+    loadedStageDataCache.propuesta = {
+      ...(loadedStageDataCache.propuesta ?? {}),
+      ...(p.resumen_general ? { productos_propuestos: String(p.resumen_general) } : {}),
+      ...(p.tipo_propuesta ? { tipo_solucion: String(p.tipo_propuesta) } : {}),
+      ...(p.equipos ? { modelo_equipo_propuesto: String(p.equipos) } : {}),
+      ...(p.cantidad_oferta
+        ? { valor_propuesta: String(p.cantidad_oferta).replace(/[^0-9.]/g, '') }
+        : {}),
+    };
+  }
+
+  // --- Fallback seguimiento/cierre: objeto seguimiento ---
+  const seg = audit.seguimiento;
+  if (seg && typeof seg === 'object') {
+    const s = seg as Record<string, unknown>;
+    const rv = String(s.resultado_venta ?? '').trim();
+
+    if (rv && !loadedStageDataCache.seguimiento?.proximo_paso) {
+      loadedStageDataCache.seguimiento = {
+        ...(loadedStageDataCache.seguimiento ?? {}),
+        ...(s.resumen_general ? { proximo_paso: String(s.resumen_general) } : {}),
+        ...(s.motivo_perdida ? { objeciones: String(s.motivo_perdida) } : {}),
+        nivel_avance:
+          s.cliente_interesado && s.cliente_ha_negociado ? 'muy_cerca' :
+          s.cliente_interesado ? 'estancado' :
+          'en_riesgo',
+      };
+    }
+
+    if ((rv === 'cerrada' || rv === 'perdida') && !loadedStageDataCache.cierre?.resultado_cierre) {
+      const resultadoCierre =
+        rv === 'cerrada' ? 'ganado' :
+        rv === 'perdida' ? 'perdido' :
+        'en_pausa';
+      loadedStageDataCache.cierre = {
+        ...(loadedStageDataCache.cierre ?? {}),
+        resultado_cierre: resultadoCierre,
+        ...(s.resumen_general ? { razon_cierre: String(s.resumen_general) } : {}),
+        ...(s.motivo_perdida ? { razon_cierre: String(s.motivo_perdida) } : {}),
+      };
+    }
+  }
+}
 
 /** Reconstruye respuestas por etapa desde el historial en `lead_app_state` (no hay GET /api/stage-data en la API). */
 async function loadAllStageData(oppNumber: string): Promise<Record<string, Record<string, string>>> {
