@@ -1019,6 +1019,7 @@ async function syncStageToApi(
         const motivoPerdida = resultadoVenta === 'perdida'
           ? (stageData.razon_cierre || stageData.objeciones || 'Sin motivo especificado')
           : '';
+        // PUT .../seguimiento con cerrada|perdida → la API avanza a etapa 6 automáticamente.
         await apiFetch(`${base}/seguimiento`, jsonPut({
           resultado_venta: resultadoVenta,
           motivo_perdida: motivoPerdida,
@@ -1027,8 +1028,6 @@ async function syncStageToApi(
           cliente_ha_negociado: true,
           stage_feedback_json: { 6: stageData },
         }));
-        // Avanzar stage a 6 (CIERRE) explícitamente.
-        await apiFetch(`${base}/opportunity-stage`, json({ stage: 6 }));
         break;
       }
 
@@ -1454,6 +1453,12 @@ export async function mountApp(): Promise<void> {
 
     void (async () => {
       try {
+        // 1. Primero: sincronizar con la tabla audits (fuente de verdad del dashboard/métricas).
+        if (snapshot.opportunityNumber.trim()) {
+          await syncStageToApi(snapshot, stage, currentStageData);
+        }
+
+        // 2. Luego: persistir estado de UI en /api/state como auxiliar.
         const synced = await saveStateSynced(state);
         setSubmitStatus(els, synced ? 'Guardado' : 'Guardado solo en este equipo (revisa la API)');
 
@@ -1484,7 +1489,6 @@ export async function mountApp(): Promise<void> {
         }
 
         if (snapshot.opportunityNumber.trim()) {
-          void syncStageToApi(snapshot, stage, currentStageData);
 
           void apiFetch('/api/opportunity', {
             method: 'PUT',
