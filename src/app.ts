@@ -930,48 +930,113 @@ function resolveLeadOrigin(snapshot: OpportunityForm): string {
   return 'web';
 }
 
-async function postPrimaryAuditPayload(
+/**
+ * Sincroniza el envío de una etapa con el endpoint específico de la API.
+ * La tabla `audits` es la fuente de verdad del dashboard y las métricas.
+ * Cada etapa escribe en el campo correcto para que:
+ *  - Reunión   → `advisor_feedback_at` se setea, el auditor deja de alertar
+ *  - Propuesta → `propuesta` alimenta métricas de propuestas por rubro
+ *  - Seguimiento/Cierre → `resultado_venta` + `motivo_perdida` alimentan ventas/motivos
+ */
+async function syncStageToApi(
   snapshot: OpportunityForm,
   stage: { id: StageId; label: string },
   stageData: Record<string, string>,
 ): Promise<void> {
   const clientId = normalizeOpportunityKey(snapshot.opportunityNumber);
   if (!clientId) return;
-  const origin = resolveLeadOrigin(snapshot);
-  const payload = {
-    client_id: clientId,
-    opportunityNumber: clientId,
-    validator: origin,
-    origin,
-    stage_id: stage.id,
-    stage_data: stageData,
-    client_name: snapshot.clientName,
-    client_email: snapshot.clientEmail,
-    client_phone: snapshot.clientPhone,
-    advisor_name: snapshot.sellerName,
-    notes: snapshot.notes,
-  };
 
-  // Flujo principal recomendado: assign-round-robin; fallback limpio a /api/audit.
-  try {
-    const r = await apiFetch('/api/audit/assign-round-robin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (r.ok) return;
-  } catch {
-    /* fallback below */
-  }
+  const base = `/api/audit/client/${encodeURIComponent(clientId)}`;
+  const json = (body: unknown) => ({
+    method: 'PATCH' as const,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const jsonPut = (body: unknown) => ({ ...json(body), method: 'PUT' as const });
 
   try {
-    void apiFetch('/api/audit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    /* non-blocking */
+    switch (stage.id) {
+      case 'reunion': {
+        // PATCH .../retroalimentacion — setea advisor_feedback_at, detiene alertas del auditor.
+        const feedbackText = [
+          stageData.temas_tratados,
+          stageData.productos_ofrecidos,
+          stageData.asistentes_reunion,
+        ].filter(Boolean).join(' | ') || 'Reunión completada';
+        await apiFetch(`${base}/retroalimentacion`, json({
+          stage: 2,
+          advisor_feedback: feedbackText,
+          stage_feedback_json: { 2: stageData },
+        }));
+        break;
+      }
+
+      case 'propuesta': {
+        // PUT .../propuesta — alimenta gráfica "propuestas por rubro" y avanza stage a 4.
+        const equiposDesc = [
+          stageData.modelo_equipo_propuesto,
+          stageData.cantidad_equipos ? `x${stageData.cantidad_equipos}` : '',
+        ].filter(Boolean).join(' ');
+        const rubro = loadedStageDataCache.asignacion?.industria_sector
+          ?? stageData.industria_sector
+          ?? '';
+        await apiFetch(`${base}/propuesta`, jsonPut({
+          resumen_general: stageData.productos_propuestos || snapshot.notes || 'Sin resumen',
+          tipo_propuesta: stageData.tipo_solucion || '',
+          equipos: equiposDesc,
+          rubro,
+          cantidad_oferta: stageData.valor_propuesta
+            ? `$${stageData.valor_propuesta}`
+            : '',
+          stage_feedback_json: { 3: stageData },
+        }));
+        break;
+      }
+
+      case 'seguimiento': {
+        // PUT .../seguimiento — avanza stage a 5 y actualiza métricas de seguimiento.
+        const nivelAvance = stageData.nivel_avance ?? '';
+        const clienteInteresado = nivelAvance !== 'en_riesgo';
+        const clienteHaNegociado = ['muy_cerca', 'en_negociacion'].includes(nivelAvance);
+        await apiFetch(`${base}/seguimiento`, jsonPut({
+          resultado_venta: 'en_seguimiento',
+          resumen_general: stageData.proximo_paso || stageData.tema_seguimiento || '',
+          cliente_interesado: clienteInteresado,
+          cliente_ha_negociado: clienteHaNegociado,
+          motivo_perdida: stageData.objeciones || '',
+          stage_feedback_json: { 5: stageData },
+        }));
+        break;
+      }
+
+      case 'cierre': {
+        // PUT .../seguimiento con resultado_venta → alimenta ventas cerradas/perdidas y motivos.
+        const resultadoCierre = stageData.resultado_cierre ?? '';
+        const resultadoVenta =
+          resultadoCierre === 'ganado' ? 'cerrada' :
+          resultadoCierre === 'perdido' ? 'perdida' :
+          'en_seguimiento';
+        const motivoPerdida = resultadoVenta === 'perdida'
+          ? (stageData.razon_cierre || stageData.objeciones || 'Sin motivo especificado')
+          : '';
+        await apiFetch(`${base}/seguimiento`, jsonPut({
+          resultado_venta: resultadoVenta,
+          motivo_perdida: motivoPerdida,
+          resumen_general: stageData.razon_cierre || '',
+          cliente_interesado: resultadoVenta === 'cerrada',
+          cliente_ha_negociado: true,
+          stage_feedback_json: { 6: stageData },
+        }));
+        // Avanzar stage a 6 (CIERRE) explícitamente.
+        await apiFetch(`${base}/opportunity-stage`, json({ stage: 6 }));
+        break;
+      }
+
+      default:
+        break;
+    }
+  } catch (err) {
+    console.warn('[syncStageToApi] Error sincronizando etapa', stage.id, err);
   }
 }
 
@@ -1419,7 +1484,7 @@ export async function mountApp(): Promise<void> {
         }
 
         if (snapshot.opportunityNumber.trim()) {
-          void postPrimaryAuditPayload(snapshot, stage, currentStageData);
+          void syncStageToApi(snapshot, stage, currentStageData);
 
           void apiFetch('/api/opportunity', {
             method: 'PUT',
