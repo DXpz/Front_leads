@@ -1074,8 +1074,20 @@ async function syncStageToApi(
         break;
       }
 
+      case 'demo': {
+        const feedbackText = [
+          stageData.comentario_demo,
+          stageData.resultado_cobertura,
+        ].filter(Boolean).join(' | ') || 'Demo completada';
+        await apiFetch(`${base}/retroalimentacion`, json({
+          stage: 3,
+          retroalimentacion: feedbackText,
+          stage_feedback_json: { 3: stageData },
+        }));
+        break;
+      }
+
       case 'propuesta': {
-        // PUT .../propuesta — alimenta gráfica "propuestas por rubro" y avanza stage a 4.
         const equiposDesc = [
           stageData.modelo_equipo_propuesto,
           stageData.cantidad_equipos ? `x${stageData.cantidad_equipos}` : '',
@@ -1083,6 +1095,8 @@ async function syncStageToApi(
         const rubro = loadedStageDataCache.asignacion?.industria_sector
           ?? stageData.industria_sector
           ?? '';
+        const hasDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+        const proposalStage = hasDemo ? 4 : 3;
         await apiFetch(`${base}/propuesta`, jsonPut({
           resumen_general: stageData.productos_propuestos || snapshot.notes || 'Sin resumen',
           tipo_propuesta: stageData.tipo_solucion || '',
@@ -1091,29 +1105,29 @@ async function syncStageToApi(
           cantidad_oferta: stageData.valor_propuesta
             ? `$${stageData.valor_propuesta}`
             : '',
-          stage_feedback_json: { 3: stageData },
+          stage_feedback_json: { [proposalStage]: stageData },
         }));
         break;
       }
 
       case 'seguimiento': {
-        // PUT .../seguimiento — avanza stage a 5 y actualiza métricas de seguimiento.
         const nivelAvance = stageData.nivel_avance ?? '';
         const clienteInteresado = nivelAvance !== 'en_riesgo';
         const clienteHaNegociado = ['muy_cerca', 'en_negociacion'].includes(nivelAvance);
+        const hasDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+        const segStage = hasDemo ? 5 : 4;
         await apiFetch(`${base}/seguimiento`, jsonPut({
           resultado_venta: 'en_seguimiento',
           resumen_general: stageData.proximo_paso || stageData.tema_seguimiento || '',
           cliente_interesado: clienteInteresado,
           cliente_ha_negociado: clienteHaNegociado,
           motivo_perdida: stageData.objeciones || '',
-          stage_feedback_json: { 5: stageData },
+          stage_feedback_json: { [segStage]: stageData },
         }));
         break;
       }
 
       case 'cierre': {
-        // PUT .../seguimiento con resultado_venta → alimenta ventas cerradas/perdidas y motivos.
         const resultadoCierre = stageData.resultado_cierre ?? '';
         const resultadoVenta =
           resultadoCierre === 'ganado' ? 'cerrada' :
@@ -1122,14 +1136,15 @@ async function syncStageToApi(
         const motivoPerdida = resultadoVenta === 'perdida'
           ? (stageData.razon_cierre || stageData.objeciones || 'Sin motivo especificado')
           : '';
-        // PUT .../seguimiento con cerrada|perdida → la API avanza a etapa 6 automáticamente.
+        const hasDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+        const closeStage = hasDemo ? 6 : 5;
         await apiFetch(`${base}/seguimiento`, jsonPut({
           resultado_venta: resultadoVenta,
           motivo_perdida: motivoPerdida,
           resumen_general: stageData.razon_cierre || '',
           cliente_interesado: resultadoVenta === 'cerrada',
-          cliente_ha_negociado: true,
-          stage_feedback_json: { 6: stageData },
+          cliente_ha_negoiciado: true,
+          stage_feedback_json: { [closeStage]: stageData },
         }));
         break;
       }
@@ -1545,7 +1560,12 @@ export async function mountApp(): Promise<void> {
     const submittedStageIdx = STAGES.indexOf(stage);
 
     if (els.advanceNext.checked && state.currentStageIndex < STAGE_COUNT - 1) {
-      state = { ...state, currentStageIndex: state.currentStageIndex + 1 };
+      let nextIdx = state.currentStageIndex + 1;
+      if (stage.id === 'reunion' && currentStageData.requiere_demo === 'si') {
+        const demoIdx = STAGES.findIndex((s) => s.id === 'demo');
+        if (demoIdx > nextIdx) nextIdx = demoIdx;
+      }
+      state = { ...state, currentStageIndex: nextIdx };
     }
 
     const advancedToNext = els.advanceNext.checked && state.currentStageIndex > submittedStageIdx;

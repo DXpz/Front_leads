@@ -233,6 +233,29 @@ const REUNION_FIELDS: StageField[] = [
     placeholder: 'Marca, modelo, cantidad aproximada…',
     showWhen: { field: 'tienen_radios', values: ['si'] },
   },
+  {
+    id: 'requiere_demo',
+    label: '¿Solicitan demo?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'no', label: 'No' },
+    ],
+  },
+  {
+    id: 'cobertura_demo',
+    label: 'Cobertura nacional o mayor a 3km',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'nacional', label: 'Nacional' },
+      { value: 'mayor_3km', label: 'Mayor a 3 km' },
+    ],
+    showWhen: { field: 'requiere_demo', values: ['si'] },
+  },
 ];
 
 const PROPUESTA_FIELDS: StageField[] = [
@@ -543,9 +566,88 @@ const CIERRE_FIELDS: StageField[] = [
   },
 ];
 
+const DEMO_FIELDS: StageField[] = [
+  {
+    id: 'fecha_demo',
+    label: 'Fecha de la demo',
+    type: 'date',
+    required: true,
+  },
+  {
+    id: 'cobertura_demo',
+    label: 'Cobertura',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'nacional', label: 'Nacional' },
+      { value: 'mayor_3km', label: 'Mayor a 3 km' },
+      { value: 'local', label: 'Local (urbana)' },
+    ],
+  },
+  {
+    id: 'servicio_demo',
+    label: 'Servicio mostrado',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'voz', label: 'Solo voz' },
+      { value: 'voz_gps', label: 'Voz + GPS' },
+      { value: 'voz_gps_tareas', label: 'Voz + GPS + Tareas' },
+      { value: 'voz_gps_tareas_video', label: 'Voz + GPS + Tareas + Video' },
+      { value: 'full', label: 'Full (todo)' },
+    ],
+  },
+  {
+    id: 'uso_equipos_demo',
+    label: '¿El cliente usó los equipos?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'no', label: 'No' },
+      { value: 'parcial', label: 'Parcialmente' },
+    ],
+  },
+  {
+    id: 'pruebas_cobertura',
+    label: '¿Probaron cobertura?',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'si', label: 'Sí' },
+      { value: 'no', label: 'No' },
+    ],
+  },
+  {
+    id: 'resultado_cobertura',
+    label: 'Resultado de cobertura',
+    type: 'text',
+    placeholder: 'Ej.Excelente, Regular, No funcionó…',
+  },
+  {
+    id: 'comentario_demo',
+    label: 'Feedback del cliente',
+    type: 'textarea',
+    required: true,
+    placeholder: 'Qué dijo el cliente, impresión general',
+  },
+  {
+    id: 'siguiente_paso_demo',
+    label: 'Siguiente paso',
+    type: 'textarea',
+    required: true,
+    placeholder: 'Qué sigue después de la demo',
+  },
+];
+
 const STAGE_FIELDS: Record<StageId, StageField[]> = {
   asignacion: ASIGNACION_FIELDS,
   reunion: REUNION_FIELDS,
+  demo: DEMO_FIELDS,
   propuesta: PROPUESTA_FIELDS,
   seguimiento: SEGUIMIENTO_FIELDS,
   cierre: CIERRE_FIELDS,

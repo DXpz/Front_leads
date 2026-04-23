@@ -1,6 +1,7 @@
 export type StageId =
   | 'asignacion'
   | 'reunion'
+  | 'demo'
   | 'propuesta'
   | 'seguimiento'
   | 'cierre';

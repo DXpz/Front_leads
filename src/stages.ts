@@ -27,6 +27,13 @@ export const STAGES: readonly StageDefinition[] = [
     desc: 'Primer contacto con el cliente',
   },
   {
+    id: 'demo',
+    label: 'Demo',
+    short: '2.5',
+    color: 'bg-brand-purple',
+    desc: 'Demo técnica al cliente',
+  },
+  {
     id: 'propuesta',
     label: 'Propuesta',
     short: '3',
