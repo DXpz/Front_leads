@@ -1,4 +1,4 @@
-import { STAGES, STAGE_COUNT, getStages } from './stages';
+import { STAGES, STAGE_COUNT, getStages, getStageCount } from './stages';
 import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
 import { emptySnapshot, mapLegacyStageIdToCurrent, normalizeHistoryRow } from './migrate';
 import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
