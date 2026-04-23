@@ -1,12 +1,14 @@
-import { STAGES } from '../stages';
+import { STAGES, StageDefinition } from '../stages';
 
 const STEP_INDEX_ATTR = 'data-stage-index';
 
 /**
+ * @param container Contenedor del stepper
  * @param selectedIndex Etapa que el usuario está viendo (clic en el paso).
- * @param progressIndex Hasta qué paso llegó el embudo (p. ej. `opportunity_stage - 1` desde la API): líneas y ✓.
+ * @param progressIndex Hasta qué paso llegó el embuno (p. ej. `opportunity_stage - 1` desde la API): líneas y ✓.
  * @param previousSelected Índice seleccionado anterior (animación).
  * @param previousProgress Índice de progreso CRM anterior (animación de líneas al actualizar desde API).
+ * @param showDemo Si es false, la etapa Demo se oculta del stepper.
  */
 export function renderStepper(
   container: HTMLElement,
@@ -14,11 +16,15 @@ export function renderStepper(
   progressIndex: number,
   previousSelected: number | null,
   previousProgress: number | null,
+  showDemo: boolean = false,
 ): void {
-  const prog = Math.max(0, Math.min(STAGES.length - 1, progressIndex));
-  const sel = Math.max(0, Math.min(STAGES.length - 1, selectedIndex));
+  const stages = showDemo ? STAGES : STAGES.filter(s => s.id !== 'demo');
+  const STAGE_COUNT = stages.length;
 
-  const segments = STAGES.map((s, i) => {
+  const prog = Math.max(0, Math.min(STAGE_COUNT - 1, progressIndex));
+  const sel = Math.max(0, Math.min(STAGE_COUNT - 1, selectedIndex));
+
+  const segments = stages.map((s, i) => {
     const done = i <= prog;
     const active = i === sel;
     const reviewPast = active && i < prog;
@@ -42,7 +48,7 @@ export function renderStepper(
         : 'stepper-line-fill stepper-line-fill--full';
 
     const line =
-      i < STAGES.length - 1
+      i < STAGE_COUNT - 1
         ? `<div class="stepper-line-track mx-1.5 mt-[1.0625rem] h-1.5 min-w-[1.25rem] shrink-0 sm:mx-2 sm:mt-[1.1875rem] sm:min-w-[2rem]" aria-hidden="true"><div class="${fillClass}"></div></div>`
         : '';
 

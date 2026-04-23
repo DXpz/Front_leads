@@ -243,3 +243,79 @@ Las actividades **no** pasan por la API documentada del mismo modo que el estado
 > El front **fija siempre un identificador en el Paso 1**, enriquece el formulario con **directorio + auditoría + estado previo**, guarda cada envío en **`AppState` sincronizado con el servidor**, y muestra el **historial remoto** (con `mergeAudit`) alineado a ese mismo identificador, con **etapas pasadas en solo lectura** cuando el CRM ya avanzó.
 
 Para el contrato exacto de cada endpoint, complementar con la documentación de **API_LEADS** en el repositorio del backend.
+
+---
+
+## 15. Etapa Demo Condicional
+
+### 15.1概述
+La etapa Demo es una etapa opcional que aparece dinámicamente después de Reunión únicamente cuando el cliente solicita demo durante la reunión.
+
+### 15.2 Flujo de Activación
+1. En la etapa Reunión, el asesor completa el campo `requiere_demo` (Sí/No).
+2. Si `requiere_demo = 'si'`, el campo adicional `cobertura_demo` se torna visible para especificar nacional o mayor a 3km.
+3. Al enviar Reunión con "Avanzar etapa" marcado, el frontend salta automáticamente a la etapa Demo (posición 3 en el stepper).
+4. Si `requiere_demo` es distinto de `'si'`, el flujo normal salta a Propuesta (posición 3 sin Demo).
+
+### 15.3 Campos de Reunión Relacionados
+| Campo | Tipo | Opciones | Descripción |
+|-------|------|---------|-------------|
+| `requiere_demo` | select | Sí, No | ¿El cliente solicita demo? |
+| `cobertura_demo` | select | Nacional, Mayor a 3km | Cobertura requerida (visible si requiere_demo = Sí) |
+
+### 15.4 Campos de Demo
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|----------|-------------|
+| `fecha_demo` | date | Sí | Fecha de la demo |
+| `cobertura_demo` | select | Sí | Nacional, Mayor a 3km, Local |
+| `servicio_demo` | select | Sí | Voz, Voz+GPS, Voz+GPS+Tareas, etc. |
+| `uso_equipos_demo` | select | Sí | ¿El cliente usó los equipos? |
+| `pruebas_cobertura` | select | Sí | ¿Probaron cobertura? |
+| `resultado_cobertura` | text | No | Excelente, Regular, No funcionó |
+| `comentario_demo` | textarea | Sí | Feedback del cliente |
+| `siguiente_paso_demo` | textarea | Sí | Siguiente paso post-demo |
+
+### 15.5 Stage Numbers Dinámicos
+El frontend envía stage numbers a la API según la presencia de Demo:
+
+| Etapa Front | Sin Demo | Con Demo |
+|------------|---------|---------|
+| Reunión | 2 | 2 |
+| Demo | - | 3 |
+| Propuesta | 3 | 4 |
+| Seguimiento | 4 | 5 |
+| Cierre | 5 | 6 |
+
+### 15.6 Contratos API Modificados
+
+#### PATCH /api/audit/client/{client_id}/retroalimentacion (Demo)
+```json
+{
+  "stage": 3,
+  "retroalimentacion": "comentario_demo | resultado_cobertura",
+  "stage_feedback_json": {
+    "3": {
+      "fecha_demo": "2026-01-15",
+      "cobertura_demo": "nacional",
+      "servicio_demo": "voz_gps",
+      "uso_equipos_demo": "si",
+      "pruebas_cobertura": "si",
+      "resultado_cobertura": "Excelente",
+      "comentario_demo": "Cliente molt impressed",
+      "siguiente_paso_demo": "Enviar propuesta"
+    }
+  }
+}
+```
+
+### 15.7 Lógica de Skip en app.ts
+```typescript
+// En handleStageSubmit, después de reunion:
+if (stage.id === 'reunion' && currentStageData.requiere_demo === 'si') {
+  const demoIdx = STAGES.findIndex((s) => s.id === 'demo');
+  if (demoIdx > nextIdx) nextIdx = demoIdx;
+}
+```
+
+### 15.8 Historial
+- `2026-04-23` - Implementación inicial de etapa Demo condicional.

@@ -1,4 +1,4 @@
-import { STAGES, STAGE_COUNT } from './stages';
+import { STAGES, STAGE_COUNT, getStages } from './stages';
 import type { AppState, OpportunityForm, StageEntry, StageId } from './types';
 import { emptySnapshot, mapLegacyStageIdToCurrent, normalizeHistoryRow } from './migrate';
 import { loadState, saveState, saveStateLocal, saveStateSynced } from './store';
@@ -72,13 +72,13 @@ function logEvent(_payload: {
 /** Timestamp de cuando se empezó a trabajar en la etapa actual (para calcular duración). */
 let stageEnteredAt: number = Date.now();
 
-function stageAutoClosingPercent(stageIndex: number): number {
-  const pct = Math.round(((stageIndex + 1) / STAGE_COUNT) * 100);
+function stageAutoClosingPercent(stageIndex: number, showDemo: boolean = false): number {
+  const pct = Math.round(((stageIndex + 1) / getStageCount(showDemo)) * 100);
   return Math.min(100, Math.max(0, pct));
 }
 
-function syncClosingPercentToStage(els: Elements, stageIndex: number): void {
-  els.form.closingPercent.value = String(stageAutoClosingPercent(stageIndex));
+function syncClosingPercentToStage(els: Elements, stageIndex: number, showDemo: boolean = false): void {
+  els.form.closingPercent.value = String(stageAutoClosingPercent(stageIndex, showDemo));
   updateClosingPercentBar(els.form);
 }
 
@@ -834,13 +834,15 @@ function updateStagePanel(els: Elements, state: AppState, readOnly: boolean): vo
   if (!s) return;
   els.stageTitle.textContent = s.label;
   const prog = effectiveProgressIndex(state);
+  const showDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+  const stageCount = getStageCount(showDemo);
   let badgeText: string;
   if (s.autoOnly) {
     badgeText = `Etapa automática · CRM paso ${prog + 1}`;
   } else if (readOnly) {
     badgeText = `Revisión paso ${state.currentStageIndex + 1} · CRM paso ${prog + 1}`;
   } else {
-    badgeText = `Paso ${state.currentStageIndex + 1} de ${STAGE_COUNT} · Avance CRM ${prog + 1}/${STAGE_COUNT}`;
+    badgeText = `Paso ${state.currentStageIndex + 1} de ${stageCount} · Avance CRM ${prog + 1}/${stageCount}`;
   }
   els.stageBadge.textContent = badgeText;
   els.stageBadge.className = `inline-flex w-fit items-center rounded-sm border-2 border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white ${s.color}`;
@@ -958,7 +960,8 @@ function applyStageViewLock(els: Elements, state: AppState): void {
 
 function fullRender(els: Elements, state: AppState): void {
   const progressIdx = effectiveProgressIndex(state);
-  syncClosingPercentToStage(els, progressIdx);
+  const showDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+  syncClosingPercentToStage(els, progressIdx, showDemo);
   const ro = !isCurrentStageEditable(state);
   renderStepper(
     els.stepper,
@@ -966,6 +969,7 @@ function fullRender(els: Elements, state: AppState): void {
     progressIdx,
     stepperPreviousRenderedIndex,
     stepperPreviousProgressIndex,
+    showDemo,
   );
   stepperPreviousRenderedIndex = state.currentStageIndex;
   stepperPreviousProgressIndex = progressIdx;
@@ -1558,8 +1562,11 @@ export async function mountApp(): Promise<void> {
     };
 
     const submittedStageIdx = STAGES.indexOf(stage);
+    const showDemo = currentStageData.requiere_demo === 'si';
+    const stageCount = getStageCount(showDemo);
+    const maxIdx = stageCount - 1;
 
-    if (els.advanceNext.checked && state.currentStageIndex < STAGE_COUNT - 1) {
+    if (els.advanceNext.checked && state.currentStageIndex < maxIdx) {
       let nextIdx = state.currentStageIndex + 1;
       if (stage.id === 'reunion' && currentStageData.requiere_demo === 'si') {
         const demoIdx = STAGES.findIndex((s) => s.id === 'demo');

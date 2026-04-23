@@ -58,6 +58,14 @@ export const STAGES: readonly StageDefinition[] = [
 
 export const STAGE_COUNT = STAGES.length;
 
+export function getStages(showDemo: boolean = false): readonly StageDefinition[] {
+  return showDemo ? STAGES : STAGES.filter(s => s.id !== 'demo');
+}
+
+export function getStageCount(showDemo: boolean = false): number {
+  return showDemo ? STAGES.length : STAGES.length - 1;
+}
+
 export function stageById(id: string): StageDefinition | undefined {
   return STAGES.find((s) => s.id === id);
 }
