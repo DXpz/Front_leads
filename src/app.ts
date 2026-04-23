@@ -1068,7 +1068,7 @@ async function syncStageToApi(
         ].filter(Boolean).join(' | ') || 'Reunión completada';
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 2,
-          advisor_feedback: feedbackText,
+          retroalimentacion: feedbackText,
           stage_feedback_json: { 2: stageData },
         }));
         break;
