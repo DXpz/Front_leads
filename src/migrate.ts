@@ -52,7 +52,6 @@ export const emptySnapshot = (): OpportunityForm => ({
   documentStatus: 'abierto',
   opportunityStartDate: '',
   opportunityClosingDate: '',
-  openActivitiesCount: '',
   closingPercent: '',
   potentialAmount: '',
   relatedDocClass: '',
@@ -91,7 +90,6 @@ export function snapshotFromUnknown(raw: unknown): OpportunityForm {
   s.documentStatus = typeof r.documentStatus === 'string' && r.documentStatus ? r.documentStatus : s.documentStatus;
   s.opportunityStartDate = str('opportunityStartDate', 'startDate');
   s.opportunityClosingDate = str('opportunityClosingDate', 'endDate');
-  s.openActivitiesCount = num(r.openActivitiesCount);
   s.closingPercent = num(r.closingPercent ?? r.probability);
   s.potentialAmount = num(r.potentialAmount ?? r.amount);
   s.relatedDocClass = str('relatedDocClass');

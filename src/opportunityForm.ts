@@ -12,7 +12,6 @@ export type OpportunityFormElements = {
   documentStatus: HTMLSelectElement;
   opportunityStartDate: HTMLInputElement;
   opportunityClosingDate: HTMLInputElement;
-  openActivitiesCount: HTMLInputElement;
   closingPercent: HTMLInputElement;
   closingPercentLabel: HTMLElement;
   closingPercentBar: HTMLElement;
@@ -39,7 +38,6 @@ export function queryOpportunityFormElements(): OpportunityFormElements {
     documentStatus: q<HTMLSelectElement>('document-status'),
     opportunityStartDate: q<HTMLInputElement>('opportunity-start-date'),
     opportunityClosingDate: q<HTMLInputElement>('opportunity-closing-date'),
-    openActivitiesCount: q<HTMLInputElement>('open-activities-count'),
     closingPercent: q<HTMLInputElement>('closing-percent'),
     closingPercentLabel: q<HTMLElement>('closing-percent-label'),
     closingPercentBar: q<HTMLElement>('closing-percent-bar'),
@@ -83,7 +81,6 @@ export function readOpportunityForm(
     documentStatus: els.documentStatus.value,
     opportunityStartDate: els.opportunityStartDate.value,
     opportunityClosingDate: els.opportunityClosingDate.value,
-    openActivitiesCount: numOrEmpty(els.openActivitiesCount.value),
     closingPercent: numOrEmpty(els.closingPercent.value),
     potentialAmount: 0, // Set to 0 as it's removed
     relatedDocClass: els.relatedDocClass.value.trim(),
@@ -115,7 +112,6 @@ export function writeOpportunityForm(els: OpportunityFormElements, d: Partial<Op
   if (d.documentStatus !== undefined) els.documentStatus.value = d.documentStatus;
   if (d.opportunityStartDate !== undefined) els.opportunityStartDate.value = d.opportunityStartDate;
   if (d.opportunityClosingDate !== undefined) els.opportunityClosingDate.value = d.opportunityClosingDate;
-  if (d.openActivitiesCount !== undefined) els.openActivitiesCount.value = numStr(d.openActivitiesCount);
   if (d.closingPercent !== undefined) els.closingPercent.value = numStr(d.closingPercent);
   if (d.relatedDocClass !== undefined) els.relatedDocClass.value = d.relatedDocClass;
   if (d.relatedDocNumber !== undefined) els.relatedDocNumber.value = d.relatedDocNumber;
@@ -144,7 +140,6 @@ export function setLeadFormFieldsReadonly(els: OpportunityFormElements, readOnly
     els.opportunityNumber,
     els.opportunityStartDate,
     els.opportunityClosingDate,
-    els.openActivitiesCount,
     els.closingPercent,
     els.relatedDocClass,
     els.relatedDocNumber,

@@ -13,19 +13,8 @@ export type OpportunityForm = {
   clientPhone: string;
   sellerName: string;
   totalInvoiceAmount: number | '';
-  territory: string;
-  displaySystemCurrency: boolean;
-  opportunityName: string;
-  opportunityNumber: string;
-  /**
-   * Misma clave que `client_id` en auditorías cuando alineas CRM y formulario;
-   * el historial en API puede filtrar por `clientId` además de `opportunityNumber`.
-   */
-  clientId?: string;
-  documentStatus: string;
-  opportunityStartDate: string;
-  opportunityClosingDate: string;
-  openActivitiesCount: number | '';
+territory: string;
+  displaySystemCurrency: string;
   closingPercent: number | '';
   potentialAmount: number | '';
   relatedDocClass: string;

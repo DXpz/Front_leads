@@ -182,17 +182,6 @@ type Elements = {
   btnReset: HTMLButtonElement;
   historyOpportunitySearch: HTMLInputElement;
   btnExportHistoryCsv: HTMLButtonElement;
-  btnOpenActivities: HTMLButtonElement;
-  activitiesModal: HTMLElement;
-  btnCloseActivities: HTMLButtonElement;
-  btnCancelActivity: HTMLButtonElement;
-  activitiesForm: HTMLFormElement;
-  activitiesSubtitle: HTMLElement;
-  activitiesList: HTMLElement;
-  activitiesEmpty: HTMLElement;
-  activityTitle: HTMLInputElement;
-  activityDatetime: HTMLInputElement;
-  activityNotes: HTMLTextAreaElement;
   submitStatus: HTMLElement;
   stageQuestionsPanel: HTMLElement;
   stageQuestionsTitle: HTMLElement;
@@ -232,17 +221,6 @@ function queryElements(): Elements {
     btnReset: q<HTMLButtonElement>('btn-reset'),
     historyOpportunitySearch: q<HTMLInputElement>('history-opportunity-search'),
     btnExportHistoryCsv: q<HTMLButtonElement>('btn-export-history-csv'),
-    btnOpenActivities: q<HTMLButtonElement>('btn-open-activities'),
-    activitiesModal: q('activities-modal'),
-    btnCloseActivities: q<HTMLButtonElement>('btn-close-activities'),
-    btnCancelActivity: q<HTMLButtonElement>('btn-cancel-activity'),
-    activitiesForm: q<HTMLFormElement>('activities-form'),
-    activitiesSubtitle: q('activities-subtitle'),
-    activitiesList: q('activities-list'),
-    activitiesEmpty: q('activities-empty'),
-    activityTitle: q<HTMLInputElement>('activity-title'),
-    activityDatetime: q<HTMLInputElement>('activity-datetime'),
-    activityNotes: q<HTMLTextAreaElement>('activity-notes'),
     submitStatus: q('submit-status'),
     stageQuestionsPanel: q('stage-questions-panel'),
     stageQuestionsTitle: q('stage-questions-title'),
@@ -397,9 +375,8 @@ function clearLookupAutofillFields(els: Elements): void {
   els.form.relatedDocNumber.value = '';
   els.form.opportunityStartDate.value = '';
   els.form.opportunityClosingDate.value = '';
-  els.form.documentStatus.value = 'abierto';
+els.form.documentStatus.value = 'abierto';
   els.form.totalInvoiceAmount.value = '';
-  els.form.openActivitiesCount.value = '';
   els.form.closingPercent.value = '0';
   updateClosingPercentBar(els.form);
 }
@@ -735,100 +712,6 @@ async function assignOpportunityNumberIfMissing(els: Elements): Promise<void> {
   }
 }
 
-type ActivityDto = {
-  id: string;
-  opportunity_number: string;
-  title: string;
-  scheduled_at: string;
-  notes: string;
-  created_at: string;
-};
-
-/** La API no incluye CRUD de actividades; se persisten en localStorage por número de oportunidad. */
-const ACTIVITIES_STORAGE_KEY = 'formulario-leads-activities-v1';
-type ActivitiesStore = Record<string, ActivityDto[]>;
-
-function readActivitiesStore(): ActivitiesStore {
-  try {
-    const raw = localStorage.getItem(ACTIVITIES_STORAGE_KEY);
-    if (!raw) return {};
-    const p = JSON.parse(raw) as unknown;
-    return p && typeof p === 'object' ? (p as ActivitiesStore) : {};
-  } catch {
-    return {};
-  }
-}
-
-function getActivitiesForOpp(num: string): ActivityDto[] {
-  const all = readActivitiesStore();
-  const list = all[num];
-  return Array.isArray(list) ? list : [];
-}
-
-function setActivitiesForOpp(num: string, entries: ActivityDto[]): void {
-  const all = readActivitiesStore();
-  all[num] = entries;
-  localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(all));
-}
-
-function openActivitiesModal(els: Elements): void {
-  els.activitiesModal.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeActivitiesModal(els: Elements): void {
-  els.activitiesModal.classList.add('hidden');
-  document.body.style.overflow = '';
-}
-
-function isoFromDatetimeLocal(v: string): string {
-  // datetime-local no incluye zona; lo tratamos como local y lo enviamos como ISO.
-  const d = new Date(v);
-  return d.toISOString();
-}
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString('es', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
-async function refreshActivities(els: Elements): Promise<void> {
-  const num = els.form.opportunityNumber.value.trim();
-  if (!num) {
-    els.form.openActivitiesCount.value = '';
-    els.activitiesList.innerHTML = '';
-    els.activitiesEmpty.classList.remove('hidden');
-    return;
-  }
-  try {
-    const entries = getActivitiesForOpp(num);
-    const count = entries.length;
-    els.form.openActivitiesCount.value = String(count);
-    els.activitiesEmpty.classList.toggle('hidden', count > 0);
-    els.activitiesList.innerHTML = entries
-      .map((a: ActivityDto) => {
-        const title = a.title ?? '';
-        const when = formatWhen(a.scheduled_at);
-        const notes = (a.notes ?? '').trim();
-        return `<li class="rounded-sm border border-ink-300 bg-white px-3 py-2">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="text-xs font-extrabold uppercase tracking-wide text-ink-700">${when}</div>
-              <div class="font-semibold text-ink-900">${title}</div>
-              ${notes ? `<div class="mt-1 text-xs text-ink-600">${notes.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
-            </div>
-            <button type="button" class="rounded-sm border border-ink-300 bg-brand-surface px-2 py-1 text-[10px] font-extrabold uppercase tracking-widest text-ink-700 hover:bg-ink-100" data-activity-del="${a.id}">
-              Borrar
-            </button>
-          </div>
-        </li>`;
-      })
-      .join('');
-  } catch {
-    // si falla la API, no bloqueamos; dejamos el valor actual
-  }
-}
-
 function updateStagePanel(els: Elements, state: AppState, readOnly: boolean): void {
   const s = STAGES[state.currentStageIndex];
   if (!s) return;
@@ -846,6 +729,22 @@ function updateStagePanel(els: Elements, state: AppState, readOnly: boolean): vo
   }
   els.stageBadge.textContent = badgeText;
   els.stageBadge.className = `inline-flex w-fit items-center rounded-sm border-2 border-white px-3 py-1 text-xs font-bold uppercase tracking-wide text-white ${s.color}`;
+
+  // Actualizar campo Estado dinámicamente según la etapa
+  const statusSelect = els.form.documentStatus;
+  statusSelect.innerHTML = '';
+  const statusOptions: Record<string, string> = {
+    asignacion: 'Abierto',
+    reunion: 'En reunión',
+    demo: 'En demo',
+    propuesta: 'Propuesta enviada',
+    seguimiento: 'En seguimiento',
+    cierre: 'En cierre',
+  };
+  const opt = document.createElement('option');
+  opt.value = s.id;
+  opt.textContent = statusOptions[s.id] || s.label;
+  statusSelect.appendChild(opt);
 }
 
 let historySearchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1318,111 +1217,6 @@ export async function mountApp(): Promise<void> {
     if (!v) return;
     const next = normalizeLeadIdInput(v);
     if (next !== els.form.opportunityNumber.value) els.form.opportunityNumber.value = next;
-  });
-
-  // Autonumeración: al escribir el nombre de oportunidad o al salir del campo,
-  // si no hay número, pide uno a PostgreSQL.
-  const scheduleAutoNumber = () => {
-    if (opportunityAutoNumberTimer) clearTimeout(opportunityAutoNumberTimer);
-    opportunityAutoNumberTimer = setTimeout(() => {
-      opportunityAutoNumberTimer = null;
-      void assignOpportunityNumberIfMissing(els).then(() => {
-        state = persistDraft(els, state);
-        void refreshActivities(els);
-      });
-    }, 350);
-  };
-  els.form.clientName.addEventListener('input', scheduleAutoNumber);
-  els.form.clientName.addEventListener('change', scheduleAutoNumber);
-  els.form.clientName.addEventListener('blur', scheduleAutoNumber);
-  els.form.opportunityNumber.addEventListener('focus', scheduleAutoNumber);
-
-  // Al confirmar nº oportunidad, refresca actividades (contador) desde BD.
-  els.form.opportunityNumber.addEventListener('blur', () => void refreshActivities(els));
-  els.form.opportunityNumber.addEventListener('change', () => void refreshActivities(els));
-  void refreshActivities(els);
-
-  // Modal agenda
-  els.btnOpenActivities.addEventListener('click', () => {
-    const num = els.form.opportunityNumber.value.trim();
-    if (!num) {
-      alert('Primero escribe el número de oportunidad para anexar actividades.');
-      els.form.opportunityNumber.focus();
-      return;
-    }
-    els.activitiesSubtitle.textContent = `Oportunidad Nº ${num}`;
-    openActivitiesModal(els);
-    void refreshActivities(els);
-    els.activityTitle.focus();
-  });
-  els.btnCloseActivities.addEventListener('click', () => closeActivitiesModal(els));
-  els.btnCancelActivity.addEventListener('click', () => closeActivitiesModal(els));
-  els.activitiesModal.addEventListener('click', (e) => {
-    if (e.target === els.activitiesModal) closeActivitiesModal(els);
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !els.activitiesModal.classList.contains('hidden')) closeActivitiesModal(els);
-  });
-  els.activitiesList.addEventListener('click', (e) => {
-    const t = e.target as HTMLElement;
-    const btn = t?.closest?.('button[data-activity-del]') as HTMLButtonElement | null;
-    const id = btn?.getAttribute('data-activity-del');
-    if (!id) return;
-    if (!confirm('¿Borrar esta actividad?')) return;
-    Promise.resolve()
-      .then(() => {
-        const num = els.form.opportunityNumber.value.trim();
-        const next = getActivitiesForOpp(num).filter((a) => a.id !== id);
-        setActivitiesForOpp(num, next);
-        logEvent({
-          opportunityNumber: num,
-          eventType: 'activity_deleted',
-          sellerName: els.form.sellerName.value.trim(),
-          clientName: els.form.clientName.value.trim(),
-          description: `Actividad eliminada (id: ${id})`,
-          metadata: { activityId: id },
-        });
-        return refreshActivities(els);
-      })
-      .catch(() => void 0);
-  });
-  els.activitiesForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const num = els.form.opportunityNumber.value.trim();
-    if (!num) return;
-    if (!els.activityTitle.value.trim() || !els.activityDatetime.value) {
-      els.activitiesForm.reportValidity();
-      return;
-    }
-    const payload = {
-      id: crypto.randomUUID(),
-      opportunityNumber: num,
-      title: els.activityTitle.value.trim(),
-      scheduledAt: isoFromDatetimeLocal(els.activityDatetime.value),
-      notes: els.activityNotes.value.trim(),
-    };
-    const row: ActivityDto = {
-      id: payload.id,
-      opportunity_number: num,
-      title: payload.title,
-      scheduled_at: payload.scheduledAt,
-      notes: payload.notes,
-      created_at: new Date().toISOString(),
-    };
-    const list = [...getActivitiesForOpp(num), row];
-    setActivitiesForOpp(num, list);
-    logEvent({
-      opportunityNumber: num,
-      eventType: 'activity_created',
-      sellerName: els.form.sellerName.value.trim(),
-      clientName: els.form.clientName.value.trim(),
-      description: `Actividad creada: "${payload.title}" programada ${payload.scheduledAt}`,
-      metadata: { activityId: payload.id, title: payload.title, scheduledAt: payload.scheduledAt },
-    });
-    els.activityTitle.value = '';
-    els.activityDatetime.value = '';
-    els.activityNotes.value = '';
-    void refreshActivities(els);
   });
 
   els.historyOpportunitySearch.addEventListener('input', () => scheduleHistoryPaint(els, state));
