@@ -1321,7 +1321,16 @@ export async function mountApp(): Promise<void> {
     e.preventDefault();
     if (stageSubmitInFlight) return;
     if (!isCurrentStageEditable(state)) return;
-    if (!els.leadForm.reportValidity()) return;
+    try {
+      if (!els.leadForm.reportValidity()) return;
+    } catch {
+      els.leadForm.classList.add('was-validated');
+      const firstInvalid = els.leadForm.querySelector(':invalid');
+      if (firstInvalid) {
+        (firstInvalid as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
 
     const stage = STAGES[state.currentStageIndex];
     if (!stage) return;
