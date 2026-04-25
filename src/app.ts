@@ -16,7 +16,7 @@ import {
   writeOpportunityForm,
   type OpportunityFormElements,
 } from './opportunityForm';
-import { renderStageQuestions, readStageQuestionValues } from './stageQuestions';
+import { renderStageQuestions, readStageQuestionValues, getFieldsForStage } from './stageQuestions';
 
 const SESSION_CLIENT_KEY = 'lead-session-client-id';
 
@@ -1317,49 +1317,49 @@ export async function mountApp(): Promise<void> {
     fullRender(els, state);
   });
 
-  els.leadForm.addEventListener('submit', (e) => {
+els.leadForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (stageSubmitInFlight) return;
     if (!isCurrentStageEditable(state)) return;
+
+    const stage = STAGES[state.currentStageIndex];
+    if (!stage) return;
+
+    const stageFields = getFieldsForStage(stage.id);
     const requiredFields = Array.from(els.leadForm.querySelectorAll('[required]'))
       .filter(f => {
         const details = f.closest('details:not([open])');
         return !details;
+      })
+      .filter(f => {
+        const stageField = stageFields.find(sf => `stage-q-${sf.id}` === f.id);
+        if (!stageField) return true;
+        if (!stageField.showWhen) return true;
+        const masterEl = document.getElementById(`stage-q-${stageField.showWhen.field}`);
+        const masterValue = masterEl instanceof HTMLInputElement && masterEl.type === 'checkbox'
+          ? (masterEl.checked ? 'true' : 'false')
+          : (masterEl as HTMLInputElement | HTMLSelectElement).value;
+        return stageField.showWhen.values.includes(masterValue);
       });
-    // Filtrar campos condicionalmente requeridos según el valor de requiere_demo
-    const requiereDemo = els.leadForm.querySelector<HTMLInputElement>('[id="stage-q-requiere_demo"]')?.value;
-    const filteredFields = requiredFields.filter(f => {
-      if (f.id === 'stage-q-cobertura_demo' && requiereDemo === 'no') {
-        return false; // No es requerido si no quiere demo
-      }
-      return true;
-    });
-    console.log('[submit] required fields count:', filteredFields.length, '(filtered from', requiredFields.length, ')', 'requiere_demo:', requiereDemo);
+
     let firstInvalid: Element | null = null;
-    for (const field of filteredFields) {
-      const valid = (field as HTMLInputElement).checkValidity();
-      console.log('[submit] field:', field.id || field.name || field.tagName, 'valid:', valid, 'value:', (field as HTMLInputElement).value);
-      if (!valid) {
+    for (const field of requiredFields) {
+      if (!(field as HTMLInputElement).checkValidity()) {
         firstInvalid = field;
         break;
       }
     }
     if (firstInvalid) {
-      console.log('[submit] validation failed, scrolling to:', firstInvalid.id || (firstInvalid as HTMLElement).innerText?.slice(0,30));
+      const fieldLabel = firstInvalid.closest('label')?.querySelector('span')?.textContent?.trim()
+        || firstInvalid.closest('.form-well')?.querySelector('h3')?.textContent?.trim()
+        || firstInvalid.id || 'campo';
       els.leadForm.classList.add('was-validated');
       (firstInvalid as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setSubmitStatus(els, 'Completa los campos obligatorios');
+      setSubmitStatus(els, `Falta: ${fieldLabel}`);
       return;
     }
 
-    console.log('[submit] validation passed, proceeding to sync');
-    const stage = STAGES[state.currentStageIndex];
-    if (!stage) {
-      console.log('[submit] ERROR: no stage found, currentStageIndex:', state.currentStageIndex);
-      return;
-    }
     const currentStageData = readStageQuestionValues(stage.id);
-    // Actualiza cache local para que al cambiar etapa se vean los datos.
     loadedStageDataCache[stage.id] = currentStageData;
     let snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
     snapshot = {
@@ -1408,17 +1408,17 @@ export async function mountApp(): Promise<void> {
     stageSubmitInFlight = true;
     els.btnSubmitStage.disabled = true;
     els.btnSubmitStage.classList.add('opacity-60', 'cursor-not-allowed');
+    const originalText = els.btnSubmitStage.textContent ?? '';
+    els.btnSubmitStage.textContent = 'Enviando…';
 
     void (async () => {
       try {
-        // 1. Primero: sincronizar con la tabla audits (fuente de verdad del dashboard/métricas).
         if (snapshot.opportunityNumber.trim()) {
           await syncStageToApi(snapshot, stage, currentStageData);
         }
 
-        // 2. Luego: persistir estado de UI en /api/state como auxiliar.
         const synced = await saveStateSynced(state);
-        setSubmitStatus(els, synced ? 'Guardado' : 'Guardado solo en este equipo (revisa la API)');
+        setSubmitStatus(els, synced ? 'Enviado' : 'Enviado (solo local)');
 
         const elapsed = Math.round((Date.now() - stageEnteredAt) / 1000);
         logEvent({
@@ -1432,47 +1432,27 @@ export async function mountApp(): Promise<void> {
           durationSeconds: elapsed,
         });
 
-        if (advancedToNext) {
-          const newStage = STAGES[state.currentStageIndex];
-          logEvent({
-            opportunityNumber: snapshot.opportunityNumber.trim(),
-            eventType: 'stage_advance',
-            fromStage: stage.id,
-            toStage: newStage?.id ?? '',
-            sellerName: snapshot.sellerName,
-            clientName: snapshot.clientName,
-            description: `Avanzó automáticamente de "${stage.label}" a "${newStage?.label ?? ''}"`,
-          });
-          stageEnteredAt = Date.now();
-        }
-
-        if (snapshot.opportunityNumber.trim()) {
-
-          void apiFetch('/api/opportunity', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              opportunityNumber: normalizeOpportunityKey(snapshot.opportunityNumber),
-              clientId: normalizeOpportunityKey(snapshot.opportunityNumber),
-              validator: resolveLeadOrigin(snapshot),
-              origin: resolveLeadOrigin(snapshot),
-              clientName: snapshot.clientName,
-              clientEmail: snapshot.clientEmail,
-              clientPhone: snapshot.clientPhone,
-              sellerName: snapshot.sellerName,
-            }),
-          }).catch(() => void 0);
-        }
-
+        state = {
+          ...state,
+          draft: snapshot,
+          history: [...state.history, entry],
+        };
+        persistDraft(els, state);
+        fullRender(els, state);
         writeOpportunityForm(els.form, state.draft);
         updateClosingPercentBar(els.form);
         if (snapshot.opportunityNumber.trim()) {
           syncHistorySearchWithOpportunity(els, state);
         }
         fullRender(els, state);
+      } catch (err) {
+        console.error('[submit] sync error:', err);
+        setSubmitStatus(els, 'Error al enviar');
       } finally {
         stageSubmitInFlight = false;
+        els.btnSubmitStage.disabled = false;
         els.btnSubmitStage.classList.remove('opacity-60', 'cursor-not-allowed');
+        els.btnSubmitStage.textContent = originalText;
       }
     })();
   });
