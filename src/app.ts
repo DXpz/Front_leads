@@ -1073,6 +1073,7 @@ async function syncStageToApi(
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 2,
           retroalimentacion: feedbackText,
+          notes: snapshot.notes || '',
           stage_feedback_json: { 2: stageData },
         }));
         break;
@@ -1086,6 +1087,7 @@ async function syncStageToApi(
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 3,
           retroalimentacion: feedbackText,
+          notes: snapshot.notes || '',
           stage_feedback_json: { 3: stageData },
         }));
         break;
