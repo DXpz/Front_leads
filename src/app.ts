@@ -1344,9 +1344,15 @@ export async function mountApp(): Promise<void> {
       return;
     }
 
+    console.log('[submit] validation passed, proceeding to sync');
     const stage = STAGES[state.currentStageIndex];
-    if (!stage) return;
+    if (!stage) {
+      console.log('[submit] ERROR: no stage found, currentStageIndex:', state.currentStageIndex);
+      return;
+    }
+    console.log('[submit] stage:', stage.id, stage.label);
     const currentStageData = readStageQuestionValues(stage.id);
+    console.log('[submit] currentStageData:', JSON.stringify(currentStageData).slice(0, 200));
     // Actualiza cache local para que al cambiar etapa se vean los datos.
     loadedStageDataCache[stage.id] = currentStageData;
     let snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
