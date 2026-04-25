@@ -1326,9 +1326,17 @@ export async function mountApp(): Promise<void> {
         const details = f.closest('details:not([open])');
         return !details;
       });
-    console.log('[submit] required fields count:', requiredFields.length);
+    // Filtrar campos condicionalmente requeridos según el valor de requiere_demo
+    const requiereDemo = els.leadForm.querySelector<HTMLInputElement>('[id="stage-q-requiere_demo"]')?.value;
+    const filteredFields = requiredFields.filter(f => {
+      if (f.id === 'stage-q-cobertura_demo' && requiereDemo === 'no') {
+        return false; // No es requerido si no quiere demo
+      }
+      return true;
+    });
+    console.log('[submit] required fields count:', filteredFields.length, '(filtered from', requiredFields.length, ')', 'requiere_demo:', requiereDemo);
     let firstInvalid: Element | null = null;
-    for (const field of requiredFields) {
+    for (const field of filteredFields) {
       const valid = (field as HTMLInputElement).checkValidity();
       console.log('[submit] field:', field.id || field.name || field.tagName, 'valid:', valid, 'value:', (field as HTMLInputElement).value);
       if (!valid) {
@@ -1350,9 +1358,7 @@ export async function mountApp(): Promise<void> {
       console.log('[submit] ERROR: no stage found, currentStageIndex:', state.currentStageIndex);
       return;
     }
-    console.log('[submit] stage:', stage.id, stage.label);
     const currentStageData = readStageQuestionValues(stage.id);
-    console.log('[submit] currentStageData:', JSON.stringify(currentStageData).slice(0, 200));
     // Actualiza cache local para que al cambiar etapa se vean los datos.
     loadedStageDataCache[stage.id] = currentStageData;
     let snapshot = cloneSnapshot(readOpportunityForm(els.form, currentStageData));
