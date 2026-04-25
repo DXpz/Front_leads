@@ -849,7 +849,6 @@ function applyStageViewLock(els: Elements, state: AppState): void {
   els.advanceNext.disabled = ro;
   els.btnSubmitStage.disabled = ro;
   els.btnReset.disabled = ro;
-  els.btnOpenActivities.disabled = ro;
   // Solo aplicar opacidad si el panel está visible (etapas no automáticas).
   const stage = STAGES[state.currentStageIndex];
   if (!stage?.autoOnly) {
