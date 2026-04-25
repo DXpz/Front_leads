@@ -183,6 +183,7 @@ type Elements = {
   historyOpportunitySearch: HTMLInputElement;
   btnExportHistoryCsv: HTMLButtonElement;
   submitStatus: HTMLElement;
+  sendingOverlay: HTMLElement;
   stageQuestionsPanel: HTMLElement;
   stageQuestionsTitle: HTMLElement;
   stageQuestionsContainer: HTMLElement;
@@ -222,6 +223,7 @@ function queryElements(): Elements {
     historyOpportunitySearch: q<HTMLInputElement>('history-opportunity-search'),
     btnExportHistoryCsv: q<HTMLButtonElement>('btn-export-history-csv'),
     submitStatus: q('submit-status'),
+    sendingOverlay: q('sending-overlay'),
     stageQuestionsPanel: q('stage-questions-panel'),
     stageQuestionsTitle: q('stage-questions-title'),
     stageQuestionsContainer: q('stage-questions-container'),
@@ -1410,6 +1412,8 @@ els.leadForm.addEventListener('submit', (e) => {
     els.btnSubmitStage.classList.add('opacity-60', 'cursor-not-allowed');
     const originalText = els.btnSubmitStage.textContent ?? '';
     els.btnSubmitStage.textContent = 'Enviando…';
+    els.sendingOverlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
 
     void (async () => {
       try {
@@ -1453,6 +1457,8 @@ els.leadForm.addEventListener('submit', (e) => {
         els.btnSubmitStage.disabled = false;
         els.btnSubmitStage.classList.remove('opacity-60', 'cursor-not-allowed');
         els.btnSubmitStage.textContent = originalText;
+        els.sendingOverlay.classList.add('hidden');
+        document.body.style.overflow = '';
       }
     })();
   });
