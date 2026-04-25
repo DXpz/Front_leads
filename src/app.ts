@@ -1326,16 +1326,21 @@ export async function mountApp(): Promise<void> {
         const details = f.closest('details:not([open])');
         return !details;
       });
+    console.log('[submit] required fields count:', requiredFields.length);
     let firstInvalid: Element | null = null;
     for (const field of requiredFields) {
-      if (!(field as HTMLInputElement).checkValidity()) {
+      const valid = (field as HTMLInputElement).checkValidity();
+      console.log('[submit] field:', field.id || field.name || field.tagName, 'valid:', valid, 'value:', (field as HTMLInputElement).value);
+      if (!valid) {
         firstInvalid = field;
         break;
       }
     }
     if (firstInvalid) {
+      console.log('[submit] validation failed, scrolling to:', firstInvalid.id || (firstInvalid as HTMLElement).innerText?.slice(0,30));
       els.leadForm.classList.add('was-validated');
       (firstInvalid as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setSubmitStatus(els, 'Completa los campos obligatorios');
       return;
     }
 
