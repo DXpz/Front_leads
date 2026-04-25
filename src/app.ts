@@ -1452,13 +1452,22 @@ els.leadForm.addEventListener('submit', (e) => {
       } catch (err) {
         console.error('[submit] sync error:', err);
         setSubmitStatus(els, 'Error al enviar');
+        els.sendingOverlay.querySelector('p')!.textContent = 'Error al enviar';
       } finally {
         stageSubmitInFlight = false;
         els.btnSubmitStage.disabled = false;
         els.btnSubmitStage.classList.remove('opacity-60', 'cursor-not-allowed');
         els.btnSubmitStage.textContent = originalText;
-        els.sendingOverlay.classList.add('hidden');
-        document.body.style.overflow = '';
+        setTimeout(() => {
+          els.sendingOverlay.classList.add('hidden');
+          document.body.style.overflow = '';
+          const card = els.sendingOverlay.querySelector('.sending-card');
+          if (card) card.querySelector('p')!.textContent = 'Enviando retroalimentación…';
+          const spinner = card?.querySelector('.spinner-large');
+          if (spinner) spinner.classList.remove('hidden');
+          const successCheck = card?.querySelector('.success-check');
+          if (successCheck) successCheck.classList.add('hidden');
+        }, 800);
       }
     })();
   });

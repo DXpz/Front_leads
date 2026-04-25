@@ -427,25 +427,3 @@
   animation: pulse-ring 1s ease-out infinite;
   box-shadow: 0 0 0 0 rgba(200,21,27,0.4);
 }
-
-#app-workspace {
-  animation: fadeSlideIn 0.4s ease-out;
-}
-
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-#lead-form {
-  animation: fadeIn 0.5s ease-out 0.1s both;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-#stepper {
-  animation: fadeIn 0.3s ease-out;
-}
