@@ -13,8 +13,15 @@ export type OpportunityForm = {
   clientPhone: string;
   sellerName: string;
   totalInvoiceAmount: number | '';
-territory: string;
+  territory: string;
   displaySystemCurrency: string;
+  opportunityName: string;
+  opportunityNumber: string;
+  /** Misma clave que `client_id` en auditorías cuando alineas CRM y formulario; el historial en API puede filtrar por `clientId` además de `opportunityNumber`. */
+  clientId?: string;
+  documentStatus: string;
+  opportunityStartDate: string;
+  opportunityClosingDate: string;
   closingPercent: number | '';
   potentialAmount: number | '';
   relatedDocClass: string;
@@ -37,7 +44,7 @@ export type LegacyStageEntry = {
   stageId: StageId;
   startDate: string;
   endDate: string;
-  employee: string;
+  employee: FormDataEntryValue | null;
   probability: FormDataEntryValue | null;
   amount: FormDataEntryValue | null;
   notes: string;
