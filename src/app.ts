@@ -1321,14 +1321,17 @@ export async function mountApp(): Promise<void> {
     e.preventDefault();
     if (stageSubmitInFlight) return;
     if (!isCurrentStageEditable(state)) return;
-    try {
-      if (!els.leadForm.reportValidity()) return;
-    } catch {
-      els.leadForm.classList.add('was-validated');
-      const firstInvalid = els.leadForm.querySelector(':invalid');
-      if (firstInvalid) {
-        (firstInvalid as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const requiredFields = els.leadForm.querySelectorAll('[required]');
+    let firstInvalid: Element | null = null;
+    for (const field of requiredFields) {
+      if (!(field as HTMLInputElement).checkValidity()) {
+        firstInvalid = field;
+        break;
       }
+    }
+    if (firstInvalid) {
+      els.leadForm.classList.add('was-validated');
+      (firstInvalid as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
