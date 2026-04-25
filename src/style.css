@@ -397,6 +397,10 @@
   backdrop-filter: blur(2px);
 }
 
+.sending-overlay.hidden {
+  display: none;
+}
+
 .sending-card {
   background: white;
   border-radius: 8px;
