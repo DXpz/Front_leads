@@ -1321,7 +1321,11 @@ export async function mountApp(): Promise<void> {
     e.preventDefault();
     if (stageSubmitInFlight) return;
     if (!isCurrentStageEditable(state)) return;
-    const requiredFields = els.leadForm.querySelectorAll('[required]');
+    const requiredFields = Array.from(els.leadForm.querySelectorAll('[required]'))
+      .filter(f => {
+        const details = f.closest('details:not([open])');
+        return !details;
+      });
     let firstInvalid: Element | null = null;
     for (const field of requiredFields) {
       if (!(field as HTMLInputElement).checkValidity()) {
