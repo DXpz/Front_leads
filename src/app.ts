@@ -1571,13 +1571,23 @@ els.leadForm.addEventListener('submit', (e) => {
 
   els.cwocConfirm.addEventListener('click', () => {
     const motivo = els.cwocMotivo.value.trim();
+    const descripcion = els.cwocDescripcion.value.trim();
+
+    let hasError = false;
     if (!motivo) {
       els.cwocMotivo.classList.add('input-error');
-      return;
+      hasError = true;
+    } else {
+      els.cwocMotivo.classList.remove('input-error');
     }
-    els.cwocMotivo.classList.remove('input-error');
+    if (!descripcion) {
+      els.cwocDescripcion.classList.add('input-error');
+      hasError = true;
+    } else {
+      els.cwocDescripcion.classList.remove('input-error');
+    }
+    if (hasError) return;
 
-    const descripcion = els.cwocDescripcion.value.trim();
     const stage = STAGES[state.currentStageIndex];
     const oppNum = els.form.opportunityNumber.value.trim();
 
@@ -1640,7 +1650,9 @@ els.leadForm.addEventListener('submit', (e) => {
         persistDraft(els, state);
 
         setSubmitStatus(els, 'Cerrado sin contacto');
+        scheduleHistoryPaint(els, state);
         fullRender(els, state);
+        syncHistorySearchWithOpportunity(els, state);
       } catch (err) {
         console.error('[cwoc] error:', err);
         setSubmitStatus(els, 'Error al cerrar');
