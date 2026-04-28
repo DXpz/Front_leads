@@ -366,6 +366,7 @@ type OpportunityDirectory = {
   clientPhone: string;
   sellerName: string;
   updatedAt: string;
+  documentStatus?: string;
 };
 
 let opportunityLookupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -636,6 +637,9 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
         els.form.clientEmail.value = d.clientEmail ?? '';
         els.form.clientPhone.value = d.clientPhone ?? '';
         els.form.sellerName.value = d.sellerName ?? '';
+        if (d.documentStatus) {
+          els.form.documentStatus.value = d.documentStatus;
+        }
       }
     }
   } catch {
@@ -698,6 +702,12 @@ async function lookupOpportunityAndFill(els: Elements, state: AppState): Promise
   if (apiFilledNotes) els.form.notes.value = apiFilledNotes;
   if (apiFilledStartDate) els.form.opportunityStartDate.value = apiFilledStartDate;
   if (apiFilledClosingDate) els.form.opportunityClosingDate.value = apiFilledClosingDate;
+
+  // Si el documentStatus de la API indica cierre, actualizar el estado
+  const apiDocStatus = els.form.documentStatus.value;
+  if (apiDocStatus === 'cerrado_ganado' || apiDocStatus === 'cerrado_perdido' || apiDocStatus === 'pausa') {
+    state = { ...state, draft: { ...state.draft, documentStatus: apiDocStatus } };
+  }
 
   return state;
 }
