@@ -1601,21 +1601,6 @@ els.leadForm.addEventListener('submit', (e) => {
 
     const feedbackText = `SIN CONTACTO - ${motivoLabels[motivo] || motivo}${descripcion ? `: ${descripcion}` : ''}`;
 
-    const cwocPayload = {
-      stage: state.currentStageIndex + 1,
-      retroalimentacion: feedbackText,
-      contacto_exitoso: false,
-      motivo_no_contacto: motivo,
-      descripcion_no_contacto: descripcion,
-      stage_feedback_json: {
-        [state.currentStageIndex + 1]: {
-          contacto_exitoso: 'false',
-          motivo_no_contacto: motivo,
-          descripcion_no_contacto: descripcion,
-        },
-      },
-    };
-
     closeCloseWithoutContactModal();
 
     const clientId = normalizeOpportunityKey(oppNum);
@@ -1630,29 +1615,48 @@ els.leadForm.addEventListener('submit', (e) => {
 
     void (async () => {
       try {
-        await apiFetch(`/api/audit/client/${encodeURIComponent(clientId)}/retroalimentacion`, {
-          method: 'PATCH',
+        const hasDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+        const closeStage = hasDemo ? 6 : 5;
+
+        await apiFetch(`/api/audit/client/${encodeURIComponent(clientId)}/seguimiento`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cwocPayload),
+          body: JSON.stringify({
+            resultado_venta: 'perdida',
+            motivo_perdida: feedbackText,
+            resumen_general: feedbackText,
+            cliente_interesado: false,
+            cliente_ha_negociado: false,
+            stage_feedback_json: {
+              [closeStage]: {
+                resultado_cierre: 'perdido',
+                razon_cierre: feedbackText,
+                contacto_exitoso: 'false',
+                motivo_no_contacto: motivo,
+                descripcion_no_contacto: descripcion,
+              },
+            },
+          }),
         });
 
         const entry: StageEntry = {
           id: crypto.randomUUID(),
-          stageId: stage.id,
+          stageId: 'cierre',
           createdAt: new Date().toISOString(),
           snapshot: cloneSnapshot(readOpportunityForm(els.form, {})),
         };
 
         state = {
           ...state,
+          draft: { ...state.draft, documentStatus: 'cerrado_perdido' },
           history: [...state.history, entry],
         };
+        els.form.documentStatus.value = 'cerrado_perdido';
         persistDraft(els, state);
 
-        setSubmitStatus(els, 'Cerrado sin contacto');
+        setSubmitStatus(els, 'Lead cerrado');
         scheduleHistoryPaint(els, state);
         fullRender(els, state);
-        syncHistorySearchWithOpportunity(els, state);
       } catch (err) {
         console.error('[cwoc] error:', err);
         setSubmitStatus(els, 'Error al cerrar');
