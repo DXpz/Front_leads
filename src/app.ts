@@ -203,6 +203,8 @@ type Elements = {
   cwocDescripcion: HTMLTextAreaElement;
   cwocCancel: HTMLButtonElement;
   cwocConfirm: HTMLButtonElement;
+  apiErrorOverlay: HTMLElement;
+  btnRetryApi: HTMLButtonElement;
 };
 
 function queryElements(): Elements {
@@ -250,6 +252,8 @@ function queryElements(): Elements {
     cwocDescripcion: q<HTMLTextAreaElement>('cwoc-descripcion'),
     cwocCancel: q<HTMLButtonElement>('cwoc-cancel'),
     cwocConfirm: q<HTMLButtonElement>('cwoc-confirm'),
+    apiErrorOverlay: q('api-error-overlay'),
+    btnRetryApi: q<HTMLButtonElement>('btn-retry-api'),
   };
 }
 
@@ -1089,9 +1093,21 @@ async function syncStageToApi(
 
 export async function mountApp(): Promise<void> {
   const els = queryElements();
-  let state: AppState = await loadState();
 
   void refreshSellerNameDatalist();
+
+  try {
+    const healthCheck = await apiFetch('/api/health');
+    if (!healthCheck.ok) {
+      showApiError();
+      return;
+    }
+  } catch {
+    showApiError();
+    return;
+  }
+
+  let state: AppState = await loadState();
 
   const urlClientId = readUrlClientIdParam();
   const sessionId = (sessionStorage.getItem(SESSION_CLIENT_KEY) ?? '').trim();
@@ -1697,5 +1713,28 @@ els.leadForm.addEventListener('submit', (e) => {
         }, 1200);
       }
     })();
+  });
+
+  function showApiError() {
+    els.apiErrorOverlay.classList.remove('hidden');
+    els.apiErrorOverlay.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function hideApiError() {
+    els.apiErrorOverlay.classList.add('hidden');
+    els.apiErrorOverlay.classList.remove('flex');
+    document.body.style.overflow = '';
+  }
+
+  els.btnRetryApi.addEventListener('click', () => {
+    hideApiError();
+    location.reload();
+  });
+
+  window.addEventListener('online', () => {
+    if (els.apiErrorOverlay.classList.contains('flex')) {
+      hideApiError();
+    }
   });
 }
