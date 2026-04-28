@@ -1655,7 +1655,22 @@ els.leadForm.addEventListener('submit', (e) => {
         saveState(state);
 
         setSubmitStatus(els, 'Lead cerrado');
-        fullRender(els, state);
+
+        const showDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
+        const stageCount = getStageCount(showDemo);
+        const progressIdx = stageCount - 1;
+
+        syncClosingPercentToStage(els, progressIdx, showDemo);
+        stepperPreviousProgressIndex = progressIdx;
+        renderStepper(
+          els.stepper,
+          state.currentStageIndex,
+          progressIdx,
+          stepperPreviousRenderedIndex,
+          stepperPreviousProgressIndex,
+          showDemo,
+        );
+
         lastHistoryTableRows = state.history;
         renderHistoryTable(els.historyBody, state.history, els.rowCount, els.emptyHint, {
           totalUnfiltered: state.history.length,
