@@ -1652,7 +1652,7 @@ els.leadForm.addEventListener('submit', (e) => {
           history: [...state.history, entry],
         };
         els.form.documentStatus.value = 'cerrado_perdido';
-        persistDraft(els, state);
+        saveState(state);
 
         setSubmitStatus(els, 'Lead cerrado');
         scheduleHistoryPaint(els, state);
