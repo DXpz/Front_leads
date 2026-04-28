@@ -225,7 +225,7 @@
                 <label
                   class="col-start-4 row-start-1 mb-0 self-center text-[10px] font-bold uppercase leading-snug tracking-wide text-ink-700 sm:text-xs"
                   for="opportunity-closing-date"
-                  >Fecha cierre</label>
+                  >Aproximación cierre</label>
 
                 <input
                   type="text"
@@ -281,7 +281,7 @@
 
               <label class="block">
                 <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Correo del cliente</span>
-                <input type="email" id="client-email" name="clientEmail" required autocomplete="email" class="input-industrial" placeholder="correo@ejemplo.com" />
+                <input type="email" id="client-email" name="clientEmail" autocomplete="email" class="input-industrial" placeholder="correo@ejemplo.com" />
               </label>
 
               <label class="block">
@@ -357,6 +357,13 @@
               >
                 Enviar en esta etapa
               </button>
+              <button
+                type="button"
+                id="btn-close-without-contact"
+                class="min-h-[48px] w-full rounded-sm border-2 border-black bg-white px-6 py-3 text-xs font-extrabold uppercase tracking-widest text-ink-900 shadow-card transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:w-auto sm:px-8"
+              >
+                Cerrar sin contacto
+              </button>
               <p id="submit-status" class="text-xs font-bold uppercase tracking-wide text-ink-600" aria-live="polite"></p>
             </div>
           </div>
@@ -431,6 +438,40 @@
         <span class="mx-1.5 text-ink-400" aria-hidden="true">·</span>
         <span>Uso corporativo · Equipo comercial</span>
       </footer>
+      </div>
+    </div>
+
+    <div id="close-without-contact-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm" aria-live="assertive">
+      <div class="panel w-full max-w-md mx-4 p-6">
+        <h3 class="text-lg font-extrabold uppercase tracking-wide text-brand-navy mb-4 pb-2 border-b-2 border-brand-navy">
+          Cerrar sin contacto
+        </h3>
+        <p id="cwoc-lead-info" class="text-sm font-semibold text-ink-600 mb-4"></p>
+        <div class="space-y-4">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Motivo <span class="text-brand-red">*</span></span>
+            <select id="cwoc-motivo" class="input-industrial w-full" required>
+              <option value="">Seleccionar…</option>
+              <option value="no_respondio">No respondió</option>
+              <option value="ocupado">Ocupado</option>
+              <option value="reunion_cancelada">Reunión cancelada</option>
+              <option value="cliente_no_asistio">Cliente no asistió</option>
+              <option value="otro">Otro</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-700">Descripción (opcional)</span>
+            <textarea id="cwoc-descripcion" rows="3" class="input-industrial w-full resize-y" placeholder="Detalles adicionales sobre el intento de contacto"></textarea>
+          </label>
+        </div>
+        <div class="flex flex-col gap-3 mt-6 sm:flex-row sm:justify-end">
+          <button type="button" id="cwoc-cancel" class="min-h-[44px] rounded-sm border-2 border-ink-300 bg-white px-5 py-2 text-xs font-bold uppercase tracking-wide text-ink-700 transition hover:bg-ink-100 sm:min-h-0">
+            Cancelar
+          </button>
+          <button type="button" id="cwoc-confirm" class="min-h-[44px] rounded-sm border-2 border-black bg-brand-navy px-5 py-2 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-brand-navy sm:min-h-0" style="border-color: #000">
+            Confirmar
+          </button>
+        </div>
       </div>
     </div>
 

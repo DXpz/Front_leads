@@ -188,6 +188,7 @@ type Elements = {
   stageQuestionsTitle: HTMLElement;
   stageQuestionsContainer: HTMLElement;
   btnSubmitStage: HTMLButtonElement;
+  btnCloseWithoutContact: HTMLButtonElement;
   clientGate: HTMLElement;
   appWorkspace: HTMLElement;
   gateClientId: HTMLInputElement;
@@ -196,6 +197,12 @@ type Elements = {
   gateError: HTMLElement;
   btnChangeClientId: HTMLButtonElement;
   pageHeader: HTMLElement;
+  closeWithoutContactModal: HTMLElement;
+  cwocLeadInfo: HTMLElement;
+  cwocMotivo: HTMLSelectElement;
+  cwocDescripcion: HTMLTextAreaElement;
+  cwocCancel: HTMLButtonElement;
+  cwocConfirm: HTMLButtonElement;
 };
 
 function queryElements(): Elements {
@@ -228,6 +235,7 @@ function queryElements(): Elements {
     stageQuestionsTitle: q('stage-questions-title'),
     stageQuestionsContainer: q('stage-questions-container'),
     btnSubmitStage: q<HTMLButtonElement>('btn-submit-stage'),
+    btnCloseWithoutContact: q<HTMLButtonElement>('btn-close-without-contact'),
     clientGate: q('client-id-gate'),
     appWorkspace: q('app-workspace'),
     gateClientId: q<HTMLInputElement>('gate-client-id'),
@@ -236,6 +244,12 @@ function queryElements(): Elements {
     gateError: q('gate-error'),
     btnChangeClientId: q<HTMLButtonElement>('btn-change-client-id'),
     pageHeader: q('app-page-header'),
+    closeWithoutContactModal: q('close-without-contact-modal'),
+    cwocLeadInfo: q('cwoc-lead-info'),
+    cwocMotivo: q<HTMLSelectElement>('cwoc-motivo'),
+    cwocDescripcion: q<HTMLTextAreaElement>('cwoc-descripcion'),
+    cwocCancel: q<HTMLButtonElement>('cwoc-cancel'),
+    cwocConfirm: q<HTMLButtonElement>('cwoc-confirm'),
   };
 }
 
@@ -851,6 +865,9 @@ function applyStageViewLock(els: Elements, state: AppState): void {
   els.advanceNext.disabled = ro;
   els.btnSubmitStage.disabled = ro;
   els.btnReset.disabled = ro;
+  els.btnCloseWithoutContact.disabled = ro;
+  els.btnCloseWithoutContact.classList.toggle('opacity-50', ro);
+  els.btnCloseWithoutContact.classList.toggle('cursor-not-allowed', ro);
   // Solo aplicar opacidad si el panel está visible (etapas no automáticas).
   const stage = STAGES[state.currentStageIndex];
   if (!stage?.autoOnly) {
@@ -899,9 +916,6 @@ function cloneSnapshot(form: OpportunityForm): OpportunityForm {
 function ensureDefaultDates(els: Elements): void {
   if (!els.form.opportunityStartDate.value) {
     els.form.opportunityStartDate.value = todayIsoDate();
-  }
-  if (!els.form.opportunityClosingDate.value) {
-    els.form.opportunityClosingDate.value = todayIsoDate();
   }
 }
 
@@ -1506,5 +1520,137 @@ els.leadForm.addEventListener('submit', (e) => {
     });
     stageEnteredAt = Date.now();
     fullRender(els, state);
+  });
+
+  function openCloseWithoutContactModal() {
+    if (!isCurrentStageEditable(state)) return;
+    const stage = STAGES[state.currentStageIndex];
+    if (!stage || stage.autoOnly) return;
+    const oppNum = els.form.opportunityNumber.value.trim() || 'LD';
+    els.cwocLeadInfo.textContent = `Etapa actual: ${stage.label} · ${oppNum}`;
+    els.cwocMotivo.value = '';
+    els.cwocDescripcion.value = '';
+    els.closeWithoutContactModal.classList.remove('hidden');
+    els.closeWithoutContactModal.classList.add('flex');
+    els.cwocMotivo.focus();
+  }
+
+  function closeCloseWithoutContactModal() {
+    els.closeWithoutContactModal.classList.add('hidden');
+    els.closeWithoutContactModal.classList.remove('flex');
+  }
+
+  function resolveCwocNextAction(motivo: string): string {
+    switch (motivo) {
+      case 'no_respondio':
+      case 'ocupado':
+        return 'REINTENTAR_CONTACTO';
+      case 'reunion_cancelada':
+      case 'cliente_no_asistio':
+        return 'REAGENDAR_REUNION';
+      case 'otro':
+        return 'SEGUIMIENTO_PENDIENTE';
+      default:
+        return 'REINTENTAR_CONTACTO';
+    }
+  }
+
+  els.btnCloseWithoutContact.addEventListener('click', () => {
+    openCloseWithoutContactModal();
+  });
+
+  els.cwocCancel.addEventListener('click', () => {
+    closeCloseWithoutContactModal();
+  });
+
+  els.closeWithoutContactModal.addEventListener('click', (e) => {
+    if (e.target === els.closeWithoutContactModal) {
+      closeCloseWithoutContactModal();
+    }
+  });
+
+  els.cwocConfirm.addEventListener('click', () => {
+    const motivo = els.cwocMotivo.value.trim();
+    if (!motivo) {
+      els.cwocMotivo.classList.add('input-error');
+      return;
+    }
+    els.cwocMotivo.classList.remove('input-error');
+
+    const descripcion = els.cwocDescripcion.value.trim();
+    const stage = STAGES[state.currentStageIndex];
+    const oppNum = els.form.opportunityNumber.value.trim();
+
+    const motivoLabels: Record<string, string> = {
+      no_respondio: 'No respondió',
+      ocupado: 'Ocupado',
+      reunion_cancelada: 'Reunión cancelada',
+      cliente_no_asistio: 'Cliente no asistió',
+      otro: 'Otro',
+    };
+
+    const feedbackText = `SIN CONTACTO - ${motivoLabels[motivo] || motivo}${descripcion ? `: ${descripcion}` : ''}`;
+
+    const cwocPayload = {
+      stage: state.currentStageIndex + 1,
+      retroalimentacion: feedbackText,
+      contacto_exitoso: false,
+      motivo_no_contacto: motivo,
+      descripcion_no_contacto: descripcion,
+      stage_feedback_json: {
+        [state.currentStageIndex + 1]: {
+          contacto_exitoso: 'false',
+          motivo_no_contacto: motivo,
+          descripcion_no_contacto: descripcion,
+        },
+      },
+    };
+
+    closeCloseWithoutContactModal();
+
+    const clientId = normalizeOpportunityKey(oppNum);
+    if (!clientId) {
+      setSubmitStatus(els, 'Error: sin número de cliente');
+      return;
+    }
+
+    els.sendingOverlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    els.cwocConfirm.disabled = true;
+
+    void (async () => {
+      try {
+        await apiFetch(`/api/audit/client/${encodeURIComponent(clientId)}/retroalimentacion`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cwocPayload),
+        });
+
+        const entry: StageEntry = {
+          id: crypto.randomUUID(),
+          stageId: stage.id,
+          createdAt: new Date().toISOString(),
+          snapshot: cloneSnapshot(readOpportunityForm(els.form, {})),
+        };
+
+        state = {
+          ...state,
+          history: [...state.history, entry],
+        };
+        persistDraft(els, state);
+
+        setSubmitStatus(els, 'Cerrado sin contacto');
+        fullRender(els, state);
+      } catch (err) {
+        console.error('[cwoc] error:', err);
+        setSubmitStatus(els, 'Error al cerrar');
+      } finally {
+        els.cwocConfirm.disabled = false;
+        setTimeout(() => {
+          els.sendingOverlay.classList.add('hidden');
+          document.body.style.overflow = '';
+        }, 1200);
+      }
+    })();
   });
 }
