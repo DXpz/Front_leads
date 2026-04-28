@@ -1655,8 +1655,12 @@ els.leadForm.addEventListener('submit', (e) => {
         saveState(state);
 
         setSubmitStatus(els, 'Lead cerrado');
-        scheduleHistoryPaint(els, state);
         fullRender(els, state);
+        lastHistoryTableRows = state.history;
+        renderHistoryTable(els.historyBody, state.history, els.rowCount, els.emptyHint, {
+          totalUnfiltered: state.history.length,
+          filterActive: false,
+        });
       } catch (err) {
         console.error('[cwoc] error:', err);
         setSubmitStatus(els, 'Error al cerrar');
