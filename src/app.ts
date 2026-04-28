@@ -998,10 +998,16 @@ async function syncStageToApi(
           stageData.productos_ofrecidos,
           stageData.asistentes_reunion,
         ].filter(Boolean).join(' | ') || 'Reunión completada';
+        const clientName = snapshot.clientName?.trim();
+        const clientPhone = snapshot.clientPhone?.trim();
+        const clientEmail = snapshot.clientEmail?.trim();
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 2,
           retroalimentacion: feedbackText,
           notes: snapshot.notes || '',
+          ...(clientName ? { client_name: clientName } : {}),
+          ...(clientPhone ? { client_phone: clientPhone } : {}),
+          ...(clientEmail ? { client_email: clientEmail } : {}),
           stage_feedback_json: { 2: stageData },
         }));
         break;
@@ -1012,10 +1018,16 @@ async function syncStageToApi(
           stageData.comentario_demo,
           stageData.resultado_cobertura,
         ].filter(Boolean).join(' | ') || 'Demo completada';
+        const clientName = snapshot.clientName?.trim();
+        const clientPhone = snapshot.clientPhone?.trim();
+        const clientEmail = snapshot.clientEmail?.trim();
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 3,
           retroalimentacion: feedbackText,
           notes: snapshot.notes || '',
+          ...(clientName ? { client_name: clientName } : {}),
+          ...(clientPhone ? { client_phone: clientPhone } : {}),
+          ...(clientEmail ? { client_email: clientEmail } : {}),
           stage_feedback_json: { 3: stageData },
         }));
         break;
