@@ -1001,6 +1001,9 @@ async function syncStageToApi(
         const clientName = snapshot.clientName?.trim();
         const clientPhone = snapshot.clientPhone?.trim();
         const clientEmail = snapshot.clientEmail?.trim();
+        const cierreEstimado = snapshot.opportunityClosingDate
+          ? `${snapshot.opportunityClosingDate}T00:00:00Z`
+          : undefined;
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 2,
           retroalimentacion: feedbackText,
@@ -1008,6 +1011,7 @@ async function syncStageToApi(
           ...(clientName ? { client_name: clientName } : {}),
           ...(clientPhone ? { client_phone: clientPhone } : {}),
           ...(clientEmail ? { client_email: clientEmail } : {}),
+          ...(cierreEstimado ? { cierre_estimado: cierreEstimado } : {}),
           stage_feedback_json: { 2: stageData },
         }));
         break;
@@ -1021,6 +1025,9 @@ async function syncStageToApi(
         const clientName = snapshot.clientName?.trim();
         const clientPhone = snapshot.clientPhone?.trim();
         const clientEmail = snapshot.clientEmail?.trim();
+        const cierreEstimado = snapshot.opportunityClosingDate
+          ? `${snapshot.opportunityClosingDate}T00:00:00Z`
+          : undefined;
         await apiFetch(`${base}/retroalimentacion`, json({
           stage: 3,
           retroalimentacion: feedbackText,
@@ -1028,6 +1035,7 @@ async function syncStageToApi(
           ...(clientName ? { client_name: clientName } : {}),
           ...(clientPhone ? { client_phone: clientPhone } : {}),
           ...(clientEmail ? { client_email: clientEmail } : {}),
+          ...(cierreEstimado ? { cierre_estimado: cierreEstimado } : {}),
           stage_feedback_json: { 3: stageData },
         }));
         break;
