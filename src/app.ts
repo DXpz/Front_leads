@@ -1589,13 +1589,9 @@ els.leadForm.addEventListener('submit', (e) => {
   function resolveCwocNextAction(motivo: string): string {
     switch (motivo) {
       case 'no_respondio':
-      case 'ocupado':
+      case 'presupuesto':
+      case 'precio':
         return 'REINTENTAR_CONTACTO';
-      case 'reunion_cancelada':
-      case 'cliente_no_asistio':
-        return 'REAGENDAR_REUNION';
-      case 'otro':
-        return 'SEGUIMIENTO_PENDIENTE';
       default:
         return 'REINTENTAR_CONTACTO';
     }
@@ -1639,10 +1635,8 @@ els.leadForm.addEventListener('submit', (e) => {
 
     const motivoLabels: Record<string, string> = {
       no_respondio: 'No respondió',
-      ocupado: 'Ocupado',
-      reunion_cancelada: 'Reunión cancelada',
-      cliente_no_asistio: 'Cliente no asistió',
-      otro: 'Otro',
+      presupuesto: 'Presupuesto',
+      precio: 'Precio',
     };
 
     const feedbackText = `SIN CONTACTO - ${motivoLabels[motivo] || motivo}${descripcion ? `: ${descripcion}` : ''}`;
