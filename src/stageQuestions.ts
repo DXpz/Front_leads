@@ -377,6 +377,7 @@ const PROPUESTA_FIELDS: StageField[] = [
       { value: 'correo', label: 'Correo electrónico' },
       { value: 'presencial', label: 'Presencial' },
       { value: 'portal', label: 'Portal / plataforma' },
+      { value: 'whatsapp', label: 'WhatsApp' },
       { value: 'otro', label: 'Otro' },
     ],
   },
