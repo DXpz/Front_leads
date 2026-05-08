@@ -15,22 +15,7 @@ export type StageField = {
 };
 
 const ASIGNACION_FIELDS: StageField[] = [
-  {
-    id: 'lead_origen',
-    label: '¿Cómo llegó el lead?',
-    type: 'select',
-    required: true,
-    options: [
-      { value: '', label: 'Seleccionar…' },
-      { value: 'referencia', label: 'Referencia' },
-      { value: 'sitio_web', label: 'Sitio web' },
-      { value: 'llamada_fria', label: 'Llamada en frío' },
-      { value: 'evento', label: 'Evento' },
-      { value: 'redes_sociales', label: 'Redes sociales' },
-      { value: 'otro', label: 'Otro' },
-    ],
-  },
-  {
+{
     id: 'pais_mercado',
     label: 'País',
     type: 'select',
@@ -132,6 +117,22 @@ const ASIGNACION_FIELDS: StageField[] = [
 ];
 
 const REUNION_FIELDS: StageField[] = [
+  {
+    id: 'industria_sector',
+    label: 'Sector del cliente',
+    type: 'select',
+    required: true,
+    options: [
+      { value: '', label: 'Seleccionar…' },
+      { value: 'logistica_transporte', label: 'Logística o transporte' },
+      { value: 'industria', label: 'Industria' },
+      { value: 'construccion', label: 'Construcción' },
+      { value: 'turismo_hoteleria', label: 'Turismo u hoteles' },
+      { value: 'seguridad_privada', label: 'Seguridad privada' },
+      { value: 'gobierno', label: 'Gobierno' },
+      { value: 'otro', label: 'Otro' },
+    ],
+  },
   {
     id: 'fecha_reunion',
     label: 'Fecha',
