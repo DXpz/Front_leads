@@ -1059,7 +1059,7 @@ async function syncStageToApi(
           resumen_general: stageData.productos_propuestos || snapshot.notes || 'Sin resumen',
           tipo_propuesta: stageData.tipo_solucion || '',
           equipos: equiposDesc,
-          rubro: snapshot.territory || stageData.industria_sector || loadedStageDataCache.asignacion?.industria_sector || '',
+          rubro: snapshot.territory || stageData.industria_sector || loadedStageDataCache.reunion?.industria_sector || '',
           cantidad_oferta: stageData.valor_propuesta
             ? `$${stageData.valor_propuesta}`
             : '',
