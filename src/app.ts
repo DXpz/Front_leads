@@ -1087,12 +1087,16 @@ async function syncStageToApi(
         break;
       }
 
-      case 'cierre': {
+case 'cierre': {
         const resultadoCierre = stageData.resultado_cierre ?? '';
         const resultadoVenta =
           resultadoCierre === 'ganado' ? 'cerrada' :
           resultadoCierre === 'perdido' ? 'perdida' :
           'en_seguimiento';
+        const resultadoPropuesta =
+          resultadoCierre === 'ganado' ? 'ganada' :
+          resultadoCierre === 'perdido' ? 'perdida' :
+          '';
         const motivoPerdida = resultadoVenta === 'perdida'
           ? (stageData.razon_cierre || stageData.objeciones || 'Sin motivo especificado')
           : '';
@@ -1100,10 +1104,11 @@ async function syncStageToApi(
         const closeStage = hasDemo ? 6 : 5;
         await apiFetch(`${base}/seguimiento`, jsonPut({
           resultado_venta: resultadoVenta,
+          resultado_propuesta: resultadoPropuesta,
           motivo_perdida: motivoPerdida,
           resumen_general: stageData.razon_cierre || '',
           cliente_interesado: resultadoVenta === 'cerrada',
-          cliente_ha_negoiciado: true,
+          cliente_ha_negociado: true,
           stage_feedback_json: { [closeStage]: stageData },
         }));
         break;
@@ -1669,6 +1674,7 @@ els.leadForm.addEventListener('submit', (e) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             resultado_venta: 'perdida',
+            resultado_propuesta: 'perdida',
             motivo_perdida: feedbackText,
             resumen_general: feedbackText,
             cliente_interesado: false,
