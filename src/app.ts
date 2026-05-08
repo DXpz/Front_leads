@@ -101,8 +101,14 @@ function effectiveProgressIndex(state: AppState): number {
   const h = historyMaxStageIndex(state.history);
   const byApi = crmOpportunityStageIndexFromApi;
   const ds = (state.draft.documentStatus ?? '').trim();
-  const byDocumentStatus = ds === 'cerrado_ganado' || ds === 'cerrado_perdido' || ds === 'pausa' ? 4 : -1;
-  const best = Math.max(h, byApi, byDocumentStatus);
+  const isClosed = ds === 'cerrado_ganado' || ds === 'cerrado_perdido' || ds === 'pausa';
+  const stageCount = STAGES.length;
+
+  if (isClosed) {
+    return stageCount - 1;
+  }
+
+  const best = Math.max(h, byApi);
   // Si no hay historial, pero empezamos en la etapa 1, el progreso efectivo es 0 (Asignación completada)
   if (best < 0 && state.currentStageIndex > 0) {
     return 0;
