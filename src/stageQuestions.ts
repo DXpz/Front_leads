@@ -28,22 +28,6 @@ const ASIGNACION_FIELDS: StageField[] = [
     ],
   },
   {
-    id: 'industria_sector',
-    label: 'Sector del cliente',
-    type: 'select',
-    required: true,
-    options: [
-      { value: '', label: 'Seleccionar…' },
-      { value: 'logistica_transporte', label: 'Logística o transporte' },
-      { value: 'industria', label: 'Industria' },
-      { value: 'construccion', label: 'Construcción' },
-      { value: 'turismo_hoteleria', label: 'Turismo u hoteles' },
-      { value: 'seguridad_privada', label: 'Seguridad privada' },
-      { value: 'gobierno', label: 'Gobierno' },
-      { value: 'otro', label: 'Otro' },
-    ],
-  },
-  {
     id: 'nombre_comercial',
     label: 'Nombre comercial (si aplica)',
     type: 'text',
@@ -132,6 +116,14 @@ const REUNION_FIELDS: StageField[] = [
       { value: 'gobierno', label: 'Gobierno' },
       { value: 'otro', label: 'Otro' },
     ],
+    showWhen: undefined,
+  },
+  {
+    id: 'industria_sector_otro',
+    label: 'Especificar sector',
+    type: 'text',
+    placeholder: 'Escribe el sector',
+    showWhen: { field: 'industria_sector', values: ['otro'] },
   },
   {
     id: 'fecha_reunion',
