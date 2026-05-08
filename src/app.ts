@@ -494,6 +494,7 @@ let loadedStageDataCache: Record<string, Record<string, string>> = {};
  * CRM 3 y 4 (construcción/envío propuesta) comparten la UI de Propuesta.
  */
 const CRM_STAGE_NUM_TO_ID: Record<number, string> = {
+  1: 'asignacion',
   2: 'reunion',
   3: 'propuesta',
   4: 'propuesta',
@@ -1052,16 +1053,13 @@ async function syncStageToApi(
           stageData.modelo_equipo_propuesto,
           stageData.cantidad_equipos ? `x${stageData.cantidad_equipos}` : '',
         ].filter(Boolean).join(' ');
-        const rubro = loadedStageDataCache.asignacion?.industria_sector
-          ?? stageData.industria_sector
-          ?? '';
         const hasDemo = loadedStageDataCache.reunion?.requiere_demo === 'si';
         const proposalStage = hasDemo ? 4 : 3;
         await apiFetch(`${base}/propuesta`, jsonPut({
           resumen_general: stageData.productos_propuestos || snapshot.notes || 'Sin resumen',
           tipo_propuesta: stageData.tipo_solucion || '',
           equipos: equiposDesc,
-          rubro,
+          rubro: snapshot.territory || stageData.industria_sector || loadedStageDataCache.asignacion?.industria_sector || '',
           cantidad_oferta: stageData.valor_propuesta
             ? `$${stageData.valor_propuesta}`
             : '',
